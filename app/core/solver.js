@@ -20,21 +20,22 @@
   }
 
   function normalizeConfig(rawConfig) {
+    const ell = Math.max(0, Math.floor(Number(rawConfig.ell)));
     return {
       fExpression: rawConfig.fExpression,
       gExpression: rawConfig.gExpression,
       perturbationType: rawConfig.perturbationType,
-      ell: Math.max(0, Number(rawConfig.ell)),
-      overtoneMax: Math.max(0, Number(rawConfig.overtoneMax)),
+      ell,
+      overtoneMax: Math.max(0, Math.min(ell, Math.floor(Number(rawConfig.overtoneMax)))),
       mainOrder: Math.max(1, Math.min(13, Number(rawConfig.mainOrder))),
       showAllOrders: Boolean(rawConfig.showAllOrders),
       precision: Math.max(40, Number(rawConfig.precision)),
       rMin: rawConfig.rMin,
       rMax: rawConfig.rMax,
-      horizonSamples: Math.max(120, Number(rawConfig.horizonSamples || 320)),
-      peakSamples: Math.max(160, Number(rawConfig.peakSamples || 420)),
+      horizonSamples: Math.max(240, Number(rawConfig.horizonSamples || 480)),
+      peakSamples: Math.max(400, Number(rawConfig.peakSamples || 900)),
       spectralNodes: Math.max(24, Number(rawConfig.spectralNodes || 64)),
-      plotSamples: Math.max(31, Number(rawConfig.plotSamples || 61)),
+      plotSamples: Math.max(101, Number(rawConfig.plotSamples || 401)),
       parameterSpecs: rawConfig.parameterSpecs || {},
       precisionCheck: rawConfig.precisionCheck !== false,
       storePlots: rawConfig.storePlots !== false
@@ -223,12 +224,10 @@
     return App.Numerics.dmax(ctx, width, localSpacing);
   }
 
-  function buildPlotData(metric, potential, peakPoint, domainLeft, domainRight, delta, plotSamples, ctx) {
-    const halfSpan = App.Numerics.dmin(ctx, delta.times(new ctx.D("2.5")), peakPoint.minus(domainLeft), domainRight.minus(peakPoint));
+  function buildPlotData(metric, potential, horizonPoint, domainLeft, domainRight, plotSamples, ctx) {
+    const plotRight = App.Numerics.dmin(ctx, domainRight, horizonPoint.plus(new ctx.D("10")));
     const count = plotSamples % 2 === 0 ? plotSamples + 1 : plotSamples;
-    const left = peakPoint.minus(halfSpan);
-    const right = peakPoint.plus(halfSpan);
-    const grid = App.Numerics.buildLinearGrid(left, right, count, ctx);
+    const grid = App.Numerics.buildLinearGrid(domainLeft, plotRight, count, ctx);
     const values = grid.map((point) => potential.valueAt(point));
     return {
       x: grid.map((value) => value.toString()),
@@ -358,7 +357,7 @@
     }
     let plot = null;
     if (includePlot) {
-      plot = buildPlotData(metric, potential, peak.point, domainLeft, domainRight, spectral.delta, config.plotSamples, ctx);
+      plot = buildPlotData(metric, potential, horizon.outer, domainLeft, domainRight, config.plotSamples, ctx);
     }
     return {
       params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
@@ -380,9 +379,9 @@
     );
   }
 
-  function finalizeCase(parsed, config, params) {
+  function finalizeCase(parsed, config, params, includePlot) {
     const ctx = App.Numerics.createContext(config.precision);
-    const result = solveSingleCase(parsed, config, params, ctx, config.storePlots);
+    const result = solveSingleCase(parsed, config, params, ctx, includePlot === undefined ? config.storePlots : includePlot);
     let sensitivity = "0";
     if (config.precisionCheck) {
       sensitivity = precisionSensitivity(parsed, config, params, result, false);
@@ -416,7 +415,7 @@
     }
     const cases = [];
     for (let index = 0; index < grid.length; index += 1) {
-      cases.push(finalizeCase(parsed, config, grid[index]));
+      cases.push(finalizeCase(parsed, config, grid[index], config.storePlots || index === 0));
       if (progressCallback) {
         progressCallback({
           completed: index + 1,

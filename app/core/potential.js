@@ -4,15 +4,17 @@
   function createMetricModel(fAst, gAst, params, ctx) {
     const fEval = App.Parser.createEvaluator(fAst);
     const gEval = App.Parser.createEvaluator(gAst);
-
-    function scopeWithRadius(r) {
-      const scope = Object.assign({}, params);
-      scope.r = r;
-      return scope;
+    const fDualEval = App.Parser.createDualEvaluator(fAst);
+    const gDualEval = App.Parser.createDualEvaluator(gAst);
+    const pointScope = Object.assign({}, params);
+    const dualScope = {};
+    for (const [name, value] of Object.entries(params)) {
+      dualScope[name] = { v: value, d: ctx.zero };
     }
 
     function pointValue(astEval, r) {
-      return astEval(scopeWithRadius(r), ctx.D);
+      pointScope.r = r;
+      return astEval(pointScope, ctx.D);
     }
 
     function jetsAt(r, order) {
@@ -44,12 +46,24 @@
       return product.sqrt();
     }
 
+    function fDual(r) {
+      dualScope.r = { v: r, d: ctx.one };
+      return fDualEval(dualScope, ctx.D);
+    }
+
+    function gDual(r) {
+      dualScope.r = { v: r, d: ctx.one };
+      return gDualEval(dualScope, ctx.D);
+    }
+
     return {
       params,
       fAst,
       gAst,
       f,
       g,
+      fDual,
+      gDual,
       s,
       jetsAt
     };
@@ -63,10 +77,12 @@
       if (perturbationType === "electromagnetic") {
         return metric.f(r).times(angular).div(r.times(r));
       }
-      const jets = metric.jetsAt(r, 1);
-      const fr = jets.f[0];
+      const fDual = metric.fDual(r);
+      const gDual = metric.gDual(r);
+      const fr = fDual.v;
       const angularPart = fr.times(angular).div(r.times(r));
-      const scalarPart = jets.fg[1].div(ctx.two.times(r));
+      const fgPrime = fDual.d.times(gDual.v).plus(fr.times(gDual.d));
+      const scalarPart = fgPrime.div(ctx.two.times(r));
       return angularPart.plus(scalarPart);
     }
 

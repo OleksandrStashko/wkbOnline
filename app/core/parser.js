@@ -369,15 +369,195 @@
     }
   }
 
+  function makeDual(v, d) {
+    return { v, d };
+  }
+
+  function dualMul(left, right, D) {
+    return makeDual(
+      left.v.times(right.v),
+      left.d.times(right.v).plus(left.v.times(right.d))
+    );
+  }
+
+  function dualDiv(left, right, D) {
+    const denom = right.v.times(right.v);
+    return makeDual(
+      left.v.div(right.v),
+      left.d.times(right.v).minus(left.v.times(right.d)).div(denom)
+    );
+  }
+
+  function dualPow(left, right, D) {
+    const value = left.v.pow(right.v);
+    if (right.d.isZero()) {
+      if (right.v.isInteger()) {
+        if (right.v.isZero()) {
+          return makeDual(value, new D(0));
+        }
+        return makeDual(value, right.v.times(left.v.pow(right.v.minus(1))).times(left.d));
+      }
+      return makeDual(value, value.times(right.v).times(left.d).div(left.v));
+    }
+    const termA = right.d.times(left.v.ln());
+    const termB = right.v.times(left.d).div(left.v);
+    return makeDual(value, value.times(termA.plus(termB)));
+  }
+
+  function evaluateDualAst(ast, env, D) {
+    switch (ast.kind) {
+      case "number":
+        return makeDual(new D(ast.value), new D(0));
+      case "identifier": {
+        if (ast.name === "pi") {
+          return makeDual(D.acos(-1), new D(0));
+        }
+        if (ast.name === "e") {
+          return makeDual(D.exp(1), new D(0));
+        }
+        if (!(ast.name in env)) {
+          throw new Error("Не задан параметр \"" + ast.name + "\".");
+        }
+        return env[ast.name];
+      }
+      case "unary": {
+        const value = evaluateDualAst(ast.arg, env, D);
+        return ast.op === "-" ? makeDual(value.v.neg(), value.d.neg()) : value;
+      }
+      case "binary": {
+        const left = evaluateDualAst(ast.left, env, D);
+        const right = evaluateDualAst(ast.right, env, D);
+        if (ast.op === "+") {
+          return makeDual(left.v.plus(right.v), left.d.plus(right.d));
+        }
+        if (ast.op === "-") {
+          return makeDual(left.v.minus(right.v), left.d.minus(right.d));
+        }
+        if (ast.op === "*") {
+          return dualMul(left, right, D);
+        }
+        if (ast.op === "/") {
+          return dualDiv(left, right, D);
+        }
+        if (ast.op === "^") {
+          return dualPow(left, right, D);
+        }
+        throw new Error("Неизвестная операция \"" + ast.op + "\".");
+      }
+      case "call": {
+        const args = ast.args.map((arg) => evaluateDualAst(arg, env, D));
+        const zero = new D(0);
+        const one = new D(1);
+        const two = new D(2);
+        const name = ast.name;
+        if (name === "abs" || name === "min" || name === "max") {
+          throw new Error("Функция \"" + name + "\" не поддерживается в аналитическом вычислении производной.");
+        }
+        if (name === "sqrt") {
+          ensureArgCount(name, args, [1]);
+          const value = args[0].v.sqrt();
+          return makeDual(value, args[0].d.div(two.times(value)));
+        }
+        if (name === "exp") {
+          ensureArgCount(name, args, [1]);
+          const value = args[0].v.exp();
+          return makeDual(value, value.times(args[0].d));
+        }
+        if (name === "ln") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.ln(), args[0].d.div(args[0].v));
+        }
+        if (name === "log") {
+          ensureArgCount(name, args, [1, 2]);
+          if (args.length === 1) {
+            return makeDual(args[0].v.ln(), args[0].d.div(args[0].v));
+          }
+          return dualDiv(
+            makeDual(args[0].v.ln(), args[0].d.div(args[0].v)),
+            makeDual(args[1].v.ln(), args[1].d.div(args[1].v)),
+            D
+          );
+        }
+        if (name === "sin") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.sin(), args[0].v.cos().times(args[0].d));
+        }
+        if (name === "cos") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.cos(), args[0].v.sin().neg().times(args[0].d));
+        }
+        if (name === "tan") {
+          ensureArgCount(name, args, [1]);
+          const value = args[0].v.tan();
+          return makeDual(value, args[0].d.div(args[0].v.cos().pow(2)));
+        }
+        if (name === "asin") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.asin(), args[0].d.div(one.minus(args[0].v.pow(2)).sqrt()));
+        }
+        if (name === "acos") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.acos(), args[0].d.neg().div(one.minus(args[0].v.pow(2)).sqrt()));
+        }
+        if (name === "atan") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.atan(), args[0].d.div(one.plus(args[0].v.pow(2))));
+        }
+        if (name === "sinh") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.sinh(), args[0].v.cosh().times(args[0].d));
+        }
+        if (name === "cosh") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.cosh(), args[0].v.sinh().times(args[0].d));
+        }
+        if (name === "tanh") {
+          ensureArgCount(name, args, [1]);
+          const value = args[0].v.tanh();
+          return makeDual(value, args[0].d.div(args[0].v.cosh().pow(2)));
+        }
+        if (name === "asinh") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.asinh(), args[0].d.div(one.plus(args[0].v.pow(2)).sqrt()));
+        }
+        if (name === "acosh") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(
+            args[0].v.acosh(),
+            args[0].d.div(args[0].v.minus(one).sqrt().times(args[0].v.plus(one).sqrt()))
+          );
+        }
+        if (name === "atanh") {
+          ensureArgCount(name, args, [1]);
+          return makeDual(args[0].v.atanh(), args[0].d.div(one.minus(args[0].v.pow(2))));
+        }
+        if (name === "pow") {
+          ensureArgCount(name, args, [2]);
+          return dualPow(args[0], args[1], D);
+        }
+        throw new Error("Неизвестная функция \"" + name + "\".");
+      }
+      default:
+        throw new Error("Неизвестный тип узла AST.");
+    }
+  }
+
   function createEvaluator(ast) {
     return function evaluate(env, D) {
       return evaluateAst(ast, env, D);
     };
   }
 
+  function createDualEvaluator(ast) {
+    return function evaluate(env, D) {
+      return evaluateDualAst(ast, env, D);
+    };
+  }
+
   App.Parser = {
     parseExpression,
     collectParameters,
-    createEvaluator
+    createEvaluator,
+    createDualEvaluator
   };
 })();

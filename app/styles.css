@@ -140,7 +140,8 @@ button {
 .progress-text,
 .card-head p,
 .subpanel-head p,
-#selection-meta {
+#selection-meta,
+#case-meta {
   color: var(--ink-soft);
   font-size: 0.95rem;
   line-height: 1.45;
@@ -343,6 +344,7 @@ select:focus {
   display: grid;
   grid-template-columns: 1.2fr 0.9fr;
   gap: 18px;
+  margin-top: 18px;
 }
 
 .card {
@@ -402,24 +404,28 @@ tbody tr.selected-row {
   font: inherit;
 }
 
-.diagnostics-box {
+.case-summary-grid {
   display: grid;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-chip {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(31, 44, 43, 0.1);
 }
 
-.diagnostic-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
+.summary-chip span {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
 }
 
-.diagnostic-row span:first-child {
-  color: var(--ink-soft);
+.summary-chip strong {
+  font-size: 1.05rem;
 }
 
 .chart-card {
@@ -427,13 +433,29 @@ tbody tr.selected-row {
 }
 
 .chart-wrap {
-  min-height: 360px;
+  min-height: 392px;
+}
+
+.chart-title {
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .chart-wrap svg {
   width: 100%;
-  height: 360px;
+  height: 380px;
   display: block;
+}
+
+.chart-stack {
+  display: grid;
+  gap: 22px;
+}
+
+.chart-stack-panel {
+  min-width: 0;
 }
 
 .chart-axis,
@@ -447,20 +469,36 @@ tbody tr.selected-row {
 
 .chart-line {
   fill: none;
-  stroke: var(--accent);
   stroke-width: 3;
   stroke-linejoin: round;
   stroke-linecap: round;
-}
-
-.chart-point {
-  fill: var(--gold);
 }
 
 .chart-label {
   fill: var(--ink-soft);
   font-size: 12px;
   font-family: "Consolas", "Lucida Console", monospace;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.chart-legend-swatch {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
 }
 
 @media (max-width: 1260px) {
@@ -481,6 +519,10 @@ tbody tr.selected-row {
   .hero {
     padding: 18px;
     border-radius: 18px;
+  }
+
+  .case-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .field-group,

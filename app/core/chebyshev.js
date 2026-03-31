@@ -1,5 +1,7 @@
 (function () {
   const App = self.QNMApp;
+  const nodeCache = new Map();
+  const basisCache = new Map();
 
   function zeroPoly(order, ctx) {
     const poly = [];
@@ -40,41 +42,69 @@
   }
 
   function chebyshevLobattoNodes(degree, ctx) {
+    const cacheKey = `${ctx.precision}|${degree}`;
+    if (nodeCache.has(cacheKey)) {
+      return nodeCache.get(cacheKey);
+    }
     const nodes = [];
     if (degree === 0) {
-      return [ctx.one];
+      const result = [ctx.one];
+      nodeCache.set(cacheKey, result);
+      return result;
     }
     for (let index = 0; index <= degree; index += 1) {
       const angle = ctx.pi.times(index).div(degree);
       nodes.push(angle.cos());
     }
+    nodeCache.set(cacheKey, nodes);
     return nodes;
   }
 
-  function chebyshevCoefficients(values, ctx) {
+  function chebyshevCoefficients(values, nodes, ctx) {
     const degree = values.length - 1;
     if (degree === 0) {
       return [values[0]];
     }
+    const sums = [];
+    for (let index = 0; index <= degree; index += 1) {
+      sums.push(ctx.zero);
+    }
+    for (let j = 0; j <= degree; j += 1) {
+      const weight = j === 0 || j === degree ? ctx.half : ctx.one;
+      const scaledValue = values[j].times(weight);
+      const x = nodes[j];
+      let tPrev = ctx.one;
+      sums[0] = sums[0].plus(scaledValue);
+      if (degree >= 1) {
+        let tCurr = x;
+        sums[1] = sums[1].plus(scaledValue.times(tCurr));
+        for (let k = 2; k <= degree; k += 1) {
+          const tNext = ctx.two.times(x).times(tCurr).minus(tPrev);
+          sums[k] = sums[k].plus(scaledValue.times(tNext));
+          tPrev = tCurr;
+          tCurr = tNext;
+        }
+      }
+    }
     const coefficients = [];
     for (let k = 0; k <= degree; k += 1) {
-      let sum = values[0].div(ctx.two).plus((k % 2 === 0 ? values[degree] : values[degree].neg()).div(ctx.two));
-      for (let j = 1; j < degree; j += 1) {
-        const angle = ctx.pi.times(k).times(j).div(degree);
-        sum = sum.plus(values[j].times(angle.cos()));
-      }
-      const raw = sum.times(ctx.two).div(degree);
+      const raw = sums[k].times(ctx.two).div(degree);
       coefficients.push(k === 0 || k === degree ? raw.div(ctx.two) : raw);
     }
     return coefficients;
   }
 
   function chebyshevPowerBasis(maxDegree, maxOrder, ctx) {
+    const cacheKey = `${ctx.precision}|${maxDegree}|${maxOrder}`;
+    if (basisCache.has(cacheKey)) {
+      return basisCache.get(cacheKey);
+    }
     const basis = [];
     const t0 = zeroPoly(maxOrder, ctx);
     t0[0] = ctx.one;
     basis.push(t0);
     if (maxDegree === 0) {
+      basisCache.set(cacheKey, basis);
       return basis;
     }
     const t1 = zeroPoly(maxOrder, ctx);
@@ -86,6 +116,7 @@
       const next = subPoly(scalePoly(shiftPoly(basis[degree], maxOrder, ctx), ctx.two, ctx), basis[degree - 1], ctx);
       basis.push(next);
     }
+    basisCache.set(cacheKey, basis);
     return basis;
   }
 
@@ -110,6 +141,48 @@
     return App.Numerics.absMax(ctx, tail).div(scale);
   }
 
+  function differentiateCoefficients(coefficients, ctx) {
+    const degree = coefficients.length - 1;
+    if (degree <= 0) {
+      return [ctx.zero];
+    }
+    const derivative = [];
+    for (let index = 0; index < degree; index += 1) {
+      derivative.push(ctx.zero);
+    }
+    derivative[degree - 1] = ctx.two.times(degree).times(coefficients[degree]);
+    if (degree > 1) {
+      derivative[degree - 2] = ctx.two.times(degree - 1).times(coefficients[degree - 1]);
+      for (let index = degree - 3; index >= 0; index -= 1) {
+        derivative[index] = derivative[index + 2].plus(ctx.two.times(index + 1).times(coefficients[index + 1]));
+      }
+    }
+    derivative[0] = derivative[0].div(ctx.two);
+    return derivative;
+  }
+
+  function evaluateAtZero(coefficients, ctx) {
+    let value = ctx.zero;
+    for (let index = 0; index < coefficients.length; index += 2) {
+      value = index % 4 === 0 ? value.plus(coefficients[index]) : value.minus(coefficients[index]);
+    }
+    return value;
+  }
+
+  function jetFromCoefficients(coefficients, delta, maxOrder, ctx) {
+    const jet = [evaluateAtZero(coefficients, ctx)];
+    let current = coefficients;
+    let deltaPower = ctx.one;
+    let factorial = ctx.one;
+    for (let order = 1; order <= maxOrder; order += 1) {
+      current = differentiateCoefficients(current, ctx);
+      deltaPower = deltaPower.times(delta);
+      factorial = factorial.times(order);
+      jet.push(evaluateAtZero(current, ctx).div(deltaPower.times(factorial)));
+    }
+    return jet;
+  }
+
   function jetFromPower(power, delta, ctx) {
     const jet = [];
     let deltaPower = ctx.one;
@@ -123,8 +196,7 @@
   function analyzeFunction(fn, center, delta, degree, maxOrder, ctx) {
     const nodes = chebyshevLobattoNodes(degree, ctx);
     const values = nodes.map((node) => fn(center.plus(delta.times(node))));
-    const coefficients = chebyshevCoefficients(values, ctx);
-    const power = powerCoefficientsFromChebyshev(coefficients, maxOrder, ctx);
+    const coefficients = chebyshevCoefficients(values, nodes, ctx);
     return {
       center,
       delta,
@@ -132,8 +204,7 @@
       nodes,
       values,
       coefficients,
-      power,
-      jet: jetFromPower(power, delta, ctx),
+      jet: jetFromCoefficients(coefficients, delta, maxOrder, ctx),
       tailRatio: tailRatio(coefficients, ctx)
     };
   }
@@ -152,6 +223,9 @@
   function adaptiveCollocation(fn, center, initialDelta, maxOrder, baseDegree, ctx, options) {
     const deltaFactors = options && options.deltaFactors ? options.deltaFactors : [ctx.one, new ctx.D("0.75"), new ctx.D("0.5")];
     const extraNodes = options && options.extraNodes ? options.extraNodes : 16;
+    const targetScore = options && options.targetScore
+      ? new ctx.D(options.targetScore)
+      : ctx.ten.pow(-Math.max(12, Math.floor(ctx.precision / 3)));
     const candidates = [];
     for (const factor of deltaFactors) {
       const delta = initialDelta.times(factor);
@@ -166,6 +240,17 @@
         stability,
         score
       });
+      if (score.lessThanOrEqualTo(targetScore)) {
+        return {
+          delta,
+          degree: high.degree,
+          jet: high.jet,
+          coefficients: high.coefficients,
+          stability,
+          tailRatio: high.tailRatio,
+          candidates
+        };
+      }
     }
     candidates.sort((left, right) => left.score.comparedTo(right.score));
     const best = candidates[0];

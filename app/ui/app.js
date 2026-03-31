@@ -14,11 +14,11 @@
         showAllOrders: true,
         precision: 70,
         spectralNodes: 64,
-        plotSamples: 61,
+        plotSamples: 401,
         rMin: "0.8",
         rMax: "30",
-        horizonSamples: 320,
-        peakSamples: 420,
+        horizonSamples: 480,
+        peakSamples: 900,
         parameterSpecs: {
           M: { mode: "value", value: "1" }
         }
@@ -36,11 +36,11 @@
         showAllOrders: true,
         precision: 70,
         spectralNodes: 64,
-        plotSamples: 61,
+        plotSamples: 401,
         rMin: "0.8",
         rMax: "30",
-        horizonSamples: 320,
-        peakSamples: 420,
+        horizonSamples: 480,
+        peakSamples: 900,
         parameterSpecs: {
           M: { mode: "value", value: "1" }
         }
@@ -58,11 +58,11 @@
         showAllOrders: true,
         precision: 76,
         spectralNodes: 72,
-        plotSamples: 61,
+        plotSamples: 401,
         rMin: "0.6",
         rMax: "35",
-        horizonSamples: 360,
-        peakSamples: 460,
+        horizonSamples: 560,
+        peakSamples: 980,
         parameterSpecs: {
           M: { mode: "value", value: "1" },
           Q: { mode: "value", value: "0.4" }
@@ -77,42 +77,49 @@
   let flatRows = [];
   let selectedRow = null;
   let lastRunConfig = null;
+  let baseCaseIndex = null;
 
   function $(id) {
     return document.getElementById(id);
   }
 
+  function resolveElement(id, fallbackId) {
+    return $(id) || (fallbackId ? $(fallbackId) : null) || document.createElement("div");
+  }
+
   const elements = {
-    presetSelect: $("preset-select"),
-    fExpression: $("f-expression"),
-    gExpression: $("g-expression"),
-    perturbationType: $("perturbation-type"),
-    ellInput: $("ell-input"),
-    overtoneInput: $("overtone-input"),
-    orderInput: $("order-input"),
-    showAllOrders: $("show-all-orders"),
-    precisionInput: $("precision-input"),
-    spectralNodesInput: $("spectral-nodes-input"),
-    plotSamplesInput: $("plot-samples-input"),
-    rMinInput: $("r-min-input"),
-    rMaxInput: $("r-max-input"),
-    horizonSamplesInput: $("horizon-samples-input"),
-    peakSamplesInput: $("peak-samples-input"),
-    detectParameters: $("detect-parameters"),
-    parameterList: $("parameter-list"),
-    runButton: $("run-button"),
-    statusLine: $("status-line"),
-    progressBar: $("progress-bar"),
-    progressText: $("progress-text"),
-    inputError: $("input-error"),
-    summaryLine: $("summary-line"),
-    globalWarnings: $("global-warnings"),
-    resultTableWrap: $("result-table-wrap"),
-    selectionMeta: $("selection-meta"),
-    caseWarnings: $("case-warnings"),
-    diagnosticsBox: $("diagnostics-box"),
-    orderTableWrap: $("order-table-wrap"),
-    chartWrap: $("chart-wrap")
+    presetSelect: resolveElement("preset-select"),
+    fExpression: resolveElement("f-expression"),
+    gExpression: resolveElement("g-expression"),
+    perturbationType: resolveElement("perturbation-type"),
+    ellInput: resolveElement("ell-input"),
+    overtoneInput: resolveElement("overtone-input"),
+    orderInput: resolveElement("order-input"),
+    showAllOrders: resolveElement("show-all-orders"),
+    precisionInput: resolveElement("precision-input"),
+    spectralNodesInput: resolveElement("spectral-nodes-input"),
+    plotSamplesInput: resolveElement("plot-samples-input"),
+    rMinInput: resolveElement("r-min-input"),
+    rMaxInput: resolveElement("r-max-input"),
+    horizonSamplesInput: resolveElement("horizon-samples-input"),
+    peakSamplesInput: resolveElement("peak-samples-input"),
+    detectParameters: resolveElement("detect-parameters"),
+    parameterList: resolveElement("parameter-list"),
+    runButton: resolveElement("run-button"),
+    statusLine: resolveElement("status-line"),
+    progressBar: resolveElement("progress-bar"),
+    progressText: resolveElement("progress-text"),
+    inputError: resolveElement("input-error"),
+    summaryLine: resolveElement("summary-line"),
+    globalWarnings: resolveElement("global-warnings"),
+    caseMeta: resolveElement("case-meta", "selection-meta"),
+    caseWarnings: resolveElement("case-warnings"),
+    caseSummaryWrap: resolveElement("case-summary-wrap", "diagnostics-box"),
+    resultTableWrap: resolveElement("result-table-wrap"),
+    selectionMeta: resolveElement("selection-meta"),
+    orderTableWrap: resolveElement("order-table-wrap"),
+    chartWrap: resolveElement("chart-wrap"),
+    modeChartWrap: resolveElement("mode-chart-wrap")
   };
 
   function compactNumber(text) {
@@ -125,6 +132,13 @@
       return value.toExponential(5);
     }
     return value.toFixed(8).replace(/\.?0+$/, "");
+  }
+
+  function clampInteger(value, minimum) {
+    if (!Number.isFinite(value)) {
+      return minimum;
+    }
+    return Math.max(minimum, Math.floor(value));
   }
 
   function setStatus(text) {
@@ -157,6 +171,12 @@
       return;
     }
     container.innerHTML = warnings.map((warning) => `<div class="warning-item">${warning}</div>`).join("");
+  }
+
+  function setEmptyState(container, text, extraClass) {
+    container.className = extraClass || container.className;
+    container.classList.add("empty-state");
+    container.textContent = text;
   }
 
   function createParameterRow(name, spec) {
@@ -201,6 +221,7 @@
     startInput.value = spec.start || "0";
     endInput.value = spec.end || "1";
     countInput.value = spec.count || 5;
+
     function syncVisibility() {
       const rangeMode = mode.value === "range";
       controls.classList.toggle("compact", !rangeMode);
@@ -209,6 +230,7 @@
       endInput.closest(".field").style.display = rangeMode ? "grid" : "none";
       countInput.closest(".field").style.display = rangeMode ? "grid" : "none";
     }
+
     mode.addEventListener("change", syncVisibility);
     syncVisibility();
     return row;
@@ -260,6 +282,18 @@
     }
   }
 
+  function syncAngularConstraints() {
+    const perturbationType = elements.perturbationType.value;
+    const ellMinimum = perturbationType === "electromagnetic" ? 1 : 0;
+    const ell = clampInteger(Number(elements.ellInput.value), ellMinimum);
+    const overtone = clampInteger(Number(elements.overtoneInput.value), 0);
+    elements.ellInput.min = String(ellMinimum);
+    elements.ellInput.value = String(ell);
+    elements.overtoneInput.min = "0";
+    elements.overtoneInput.max = String(ell);
+    elements.overtoneInput.value = String(Math.min(overtone, ell));
+  }
+
   function applyPreset(key) {
     const preset = presets[key] || presets.custom;
     const values = preset.values;
@@ -277,6 +311,7 @@
     elements.horizonSamplesInput.value = values.horizonSamples;
     elements.peakSamplesInput.value = values.peakSamples;
     elements.showAllOrders.checked = values.showAllOrders !== false;
+    syncAngularConstraints();
     detectParameters(values.parameterSpecs);
   }
 
@@ -285,12 +320,17 @@
     if (!names) {
       throw new Error("Не удалось разобрать выражения метрики.");
     }
+    syncAngularConstraints();
+    const perturbationType = elements.perturbationType.value;
+    const ellMinimum = perturbationType === "electromagnetic" ? 1 : 0;
+    const ell = clampInteger(Number(elements.ellInput.value), ellMinimum);
+    const overtoneMax = Math.min(clampInteger(Number(elements.overtoneInput.value), 0), ell);
     return {
       fExpression: elements.fExpression.value.trim(),
       gExpression: elements.gExpression.value.trim(),
-      perturbationType: elements.perturbationType.value,
-      ell: Number(elements.ellInput.value),
-      overtoneMax: Number(elements.overtoneInput.value),
+      perturbationType,
+      ell,
+      overtoneMax,
       mainOrder: Number(elements.orderInput.value),
       showAllOrders: elements.showAllOrders.checked,
       precision: Number(elements.precisionInput.value),
@@ -304,9 +344,19 @@
     };
   }
 
+  function estimateCaseCount(config) {
+    let total = 1;
+    for (const spec of Object.values(config.parameterSpecs || {})) {
+      if (spec.mode === "range") {
+        total *= Math.max(2, Number(spec.count || 2));
+      }
+    }
+    return total;
+  }
+
   function workerStartupErrorText() {
     if (window.location.protocol === "file:") {
-      return "Worker не запустился при открытии через file://. Если браузер продолжит блокировать запуск, откройте папку проекта через локальный сервер: python -m http.server 8000, затем перейдите на http://localhost:8000.";
+      return "Worker не запустился при открытии через file://. Если браузер блокирует запуск, откройте проект через локальный сервер: python -m http.server 8000 и затем http://localhost:8000.";
     }
     return "Не удалось запустить worker. Проверьте консоль браузера и повторите запуск.";
   }
@@ -353,17 +403,16 @@
     lastRunConfig = null;
     flatRows = [];
     selectedRow = null;
-    elements.summaryLine.textContent = "Идёт расчёт.";
+    baseCaseIndex = null;
+    elements.summaryLine.textContent = "Расчёт ещё не выполнялся.";
+    elements.caseMeta.textContent = "Базовый случай ещё не построен.";
     renderWarningStack(elements.globalWarnings, []);
     renderWarningStack(elements.caseWarnings, []);
-    elements.resultTableWrap.className = "table-wrap empty-state";
-    elements.resultTableWrap.textContent = "Идёт расчёт.";
-    elements.orderTableWrap.className = "table-wrap empty-state";
-    elements.orderTableWrap.textContent = "Нет данных по порядкам.";
-    elements.diagnosticsBox.className = "diagnostics-box empty-state";
-    elements.diagnosticsBox.textContent = "Нет диагностических данных.";
-    elements.chartWrap.className = "chart-wrap empty-state";
-    elements.chartWrap.textContent = "График станет доступен после расчёта.";
+    setEmptyState(elements.caseSummaryWrap, "Сводка геометрии появится после расчёта.", "case-summary-grid");
+    setEmptyState(elements.resultTableWrap, "Нет данных.", "table-wrap");
+    setEmptyState(elements.orderTableWrap, "Выберите строку таблицы, чтобы сравнить порядок-за-порядком.", "table-wrap");
+    setEmptyState(elements.chartWrap, "График потенциала появится сразу после расчёта базового случая.", "chart-wrap");
+    setEmptyState(elements.modeChartWrap, "График мод появится после расчёта: для скана по параметру или по клику на обертон.", "chart-wrap");
     elements.selectionMeta.textContent = "Строка не выбрана.";
   }
 
@@ -398,11 +447,15 @@
       </table>
     `;
     elements.resultTableWrap.querySelectorAll(".table-row-button").forEach((button) => {
-      button.addEventListener("click", () => selectRow(Number(button.dataset.rowIndex)));
+      button.addEventListener("click", () => selectRow(Number(button.dataset.rowIndex), true));
     });
   }
 
   function buildOrderTable(resultRow) {
+    if (!currentResult.showAllOrders) {
+      setEmptyState(elements.orderTableWrap, "Показ по порядкам отключён.", "table-wrap");
+      return;
+    }
     const rows = resultRow.caseData.orders
       .map((order) => {
         const value = resultRow.overtone.orders[order];
@@ -430,17 +483,114 @@
     `;
   }
 
-  function buildDiagnostics(caseData, resultRow) {
-    elements.diagnosticsBox.className = "diagnostics-box";
-    elements.diagnosticsBox.innerHTML = `
-      <div class="diagnostic-row"><span>Горизонт</span><strong title="${caseData.horizon || ""}">${compactNumber(caseData.horizon || "ожидание")}</strong></div>
-      <div class="diagnostic-row"><span>Пик потенциала</span><strong title="${caseData.peak || ""}">${compactNumber(caseData.peak || "ожидание")}</strong></div>
-      <div class="diagnostic-row"><span>Спектральное окно Δ</span><strong title="${caseData.delta || ""}">${compactNumber(caseData.delta || "ожидание")}</strong></div>
-      <div class="diagnostic-row"><span>Стабильность производных</span><strong title="${caseData.stability || ""}">${compactNumber(caseData.stability || "ожидание")}</strong></div>
-      <div class="diagnostic-row"><span>Хвост спектра</span><strong title="${caseData.tailRatio || ""}">${compactNumber(caseData.tailRatio || "ожидание")}</strong></div>
-      <div class="diagnostic-row"><span>Чувствительность к точности</span><strong title="${caseData.precisionSensitivity || "ожидание"}">${caseData.detailPending ? "вычисляется" : compactNumber(caseData.precisionSensitivity || "ожидание")}</strong></div>
-      <div class="diagnostic-row"><span>Обертон</span><strong>${resultRow.overtone.n}</strong></div>
+  function buildCaseSummary(caseData) {
+    const paramText = currentResult.parameterNames.map((name) => `${name}=${compactNumber(caseData.params[name])}`).join(", ");
+    if (currentResult.cases.length > 1) {
+      elements.caseMeta.textContent = `Базовый случай: ${paramText || "без дополнительных параметров"}`;
+    } else {
+      elements.caseMeta.textContent = paramText || "Параметров кроме r нет.";
+    }
+    renderWarningStack(elements.caseWarnings, caseData.warnings);
+    elements.caseSummaryWrap.className = "case-summary-grid";
+    elements.caseSummaryWrap.innerHTML = `
+      <div class="summary-chip"><span>Горизонт</span><strong title="${caseData.horizon}">${compactNumber(caseData.horizon)}</strong></div>
+      <div class="summary-chip"><span>Пик потенциала</span><strong title="${caseData.peak}">${compactNumber(caseData.peak)}</strong></div>
+      <div class="summary-chip"><span>Спектральное окно Δ</span><strong title="${caseData.delta}">${compactNumber(caseData.delta)}</strong></div>
+      <div class="summary-chip"><span>Стабильность</span><strong title="${caseData.stability}">${compactNumber(caseData.stability)}</strong></div>
     `;
+  }
+
+  function renderBaseCase(caseIndex) {
+    if (!currentResult || !currentResult.cases[caseIndex]) {
+      return;
+    }
+    baseCaseIndex = caseIndex;
+    const caseData = currentResult.cases[caseIndex];
+    buildCaseSummary(caseData);
+    if (caseData.plot) {
+      App.Chart.renderPotentialChart(elements.chartWrap, caseData.plot);
+      return;
+    }
+    if (caseData.detailFailed) {
+      setEmptyState(elements.chartWrap, "Не удалось построить график потенциала для базового случая.", "chart-wrap");
+      return;
+    }
+    elements.chartWrap.className = "chart-wrap empty-state";
+    elements.chartWrap.textContent = currentResult.cases.length > 1
+      ? "Строится график потенциала для базового случая."
+      : "Строится график потенциала.";
+    requestCaseDetail(caseIndex);
+  }
+
+  function varyingParameterNames(result) {
+    return result.parameterNames.filter((name) => {
+      if (!result.cases.length) {
+        return false;
+      }
+      const first = result.cases[0].params[name];
+      return result.cases.some((caseData) => caseData.params[name] !== first);
+    });
+  }
+
+  function renderModeScanChart() {
+    if (!currentResult || currentResult.cases.length < 2) {
+      setEmptyState(elements.modeChartWrap, "График мод доступен при скане параметра.", "chart-wrap");
+      return;
+    }
+    const varying = varyingParameterNames(currentResult);
+    if (varying.length !== 1) {
+      setEmptyState(elements.modeChartWrap, "График мод строится только при скане одного параметра.", "chart-wrap");
+      return;
+    }
+    const parameterName = varying[0];
+    const rows = currentResult.cases
+      .map((caseData) => ({
+        x: Number(caseData.params[parameterName]),
+        caseData
+      }))
+      .filter((item) => Number.isFinite(item.x))
+      .sort((left, right) => left.x - right.x);
+    if (rows.length < 2) {
+      setEmptyState(elements.modeChartWrap, "Недостаточно точек для графика мод.", "chart-wrap");
+      return;
+    }
+    const overtones = Array.from(new Set(rows[0].caseData.overtones.map((item) => item.n))).sort((left, right) => left - right);
+    const branches = overtones
+      .map((n) => ({
+        n,
+        re: rows.map((item) => Number(item.caseData.overtones.find((mode) => mode.n === n).main.re)),
+        im: rows.map((item) => Number(item.caseData.overtones.find((mode) => mode.n === n).main.im))
+      }))
+      .filter((branch) => branch.re.every(Number.isFinite) && branch.im.every(Number.isFinite));
+    if (!branches.length) {
+      setEmptyState(elements.modeChartWrap, "Не удалось собрать ветви мод для графика.", "chart-wrap");
+      return;
+    }
+    App.Chart.renderModeScanChart(elements.modeChartWrap, {
+      parameterName,
+      x: rows.map((item) => item.x),
+      branches
+    });
+  }
+
+  function renderOrderTrendChart(resultRow) {
+    if (!resultRow) {
+      setEmptyState(elements.modeChartWrap, "Выберите строку таблицы, чтобы построить график по порядкам WKB.", "chart-wrap");
+      return;
+    }
+    const orders = resultRow.caseData.orders.map((order) => Number(order));
+    const re = resultRow.caseData.orders.map((order) => Number(resultRow.overtone.orders[order].re));
+    const im = resultRow.caseData.orders.map((order) => Number(resultRow.overtone.orders[order].im));
+    if (!orders.every(Number.isFinite) || !re.every(Number.isFinite) || !im.every(Number.isFinite)) {
+      setEmptyState(elements.modeChartWrap, "Не удалось построить график по порядкам WKB.", "chart-wrap");
+      return;
+    }
+    App.Chart.renderOrderTrendChart(elements.modeChartWrap, {
+      overtone: resultRow.overtone.n,
+      orders,
+      re,
+      im
+    });
   }
 
   function rebuildFlatRows() {
@@ -459,17 +609,14 @@
 
   function requestCaseDetail(caseIndex) {
     const caseData = currentResult.cases[caseIndex];
-    if (!caseData || caseData.detailLoaded || caseData.detailPending || !lastRunConfig) {
+    if (!caseData || caseData.detailLoaded || caseData.detailPending || caseData.detailFailed || !lastRunConfig) {
       return;
     }
     caseData.detailPending = true;
-    if (selectedRow !== null) {
-      buildDiagnostics(caseData, flatRows[selectedRow]);
+    if (caseIndex === baseCaseIndex) {
+      elements.chartWrap.className = "chart-wrap empty-state";
+      elements.chartWrap.textContent = "Догружается график потенциала для базового случая.";
     }
-    elements.chartWrap.className = "chart-wrap empty-state";
-    elements.chartWrap.textContent = "Догружаются подробности выбранного случая.";
-    elements.orderTableWrap.className = "table-wrap empty-state";
-    elements.orderTableWrap.textContent = "Догружается полная диагностическая информация.";
     stopDetailWorker();
     try {
       detailWorker = createAppWorker();
@@ -477,7 +624,7 @@
       caseData.detailPending = false;
       caseData.warnings = uniqueWarnings(caseData.warnings.concat([workerStartupErrorText()]));
       if (selectedRow !== null) {
-        selectRow(selectedRow);
+        selectRow(selectedRow, false);
       }
       return;
     }
@@ -487,7 +634,7 @@
         caseData.detailPending = false;
         caseData.warnings = uniqueWarnings(caseData.warnings.concat([workerStartupErrorText()]));
         if (selectedRow !== null) {
-          selectRow(selectedRow);
+          selectRow(selectedRow, false);
         }
         stopDetailWorker();
       }
@@ -497,7 +644,7 @@
       caseData.detailPending = false;
       caseData.warnings = uniqueWarnings(caseData.warnings.concat([workerStartupErrorText()]));
       if (selectedRow !== null) {
-        selectRow(selectedRow);
+        selectRow(selectedRow, false);
       }
       stopDetailWorker();
     });
@@ -512,11 +659,15 @@
         clearTimeout(startupTimer);
         currentResult.cases[caseIndex] = Object.assign({}, currentResult.cases[caseIndex], message.caseData, {
           detailLoaded: true,
-          detailPending: false
+          detailPending: false,
+          detailFailed: false
         });
         rebuildFlatRows();
+        if (baseCaseIndex === caseIndex) {
+          renderBaseCase(caseIndex);
+        }
         if (selectedRow !== null) {
-          selectRow(selectedRow);
+          selectRow(selectedRow, false);
         }
         stopDetailWorker();
         return;
@@ -525,11 +676,16 @@
         clearTimeout(startupTimer);
         currentResult.cases[caseIndex].detailPending = false;
         currentResult.cases[caseIndex].detailLoaded = false;
+        currentResult.cases[caseIndex].detailFailed = true;
         currentResult.cases[caseIndex].warnings = uniqueWarnings(
           currentResult.cases[caseIndex].warnings.concat([message.message])
         );
+        if (baseCaseIndex === caseIndex) {
+          buildCaseSummary(currentResult.cases[caseIndex]);
+          setEmptyState(elements.chartWrap, "Не удалось построить график потенциала для базового случая.", "chart-wrap");
+        }
         if (selectedRow !== null) {
-          selectRow(selectedRow);
+          selectRow(selectedRow, false);
         }
         stopDetailWorker();
       }
@@ -538,48 +694,45 @@
       type: "detail",
       caseIndex,
       config: Object.assign({}, lastRunConfig, {
-        precisionCheck: true,
+        precisionCheck: false,
         storePlots: true
       }),
       params: caseData.params
     });
   }
 
-  function selectRow(index) {
+  function selectRow(index, loadDetails) {
     selectedRow = index;
     buildResultsTable(currentResult);
     const row = flatRows[index];
     if (!row) {
       return;
     }
-    elements.selectionMeta.textContent = `Параметры: ${currentResult.parameterNames.map((name) => `${name}=${compactNumber(row.caseData.params[name])}`).join(", ")}; n=${row.overtone.n}`;
-    renderWarningStack(elements.caseWarnings, row.caseData.warnings);
-    buildDiagnostics(row.caseData, row);
-    if (currentResult.showAllOrders && row.caseData.detailLoaded) {
-      buildOrderTable(row);
-    } else if (currentResult.showAllOrders) {
-      elements.orderTableWrap.className = "table-wrap empty-state";
-      elements.orderTableWrap.textContent = "Подробные данные по порядкам догружаются для выбранного случая.";
-    } else {
-      elements.orderTableWrap.className = "table-wrap empty-state";
-      elements.orderTableWrap.textContent = "Показ по порядкам отключён.";
+    elements.selectionMeta.textContent = `Выбрано: n=${row.overtone.n}, Re ω=${compactNumber(row.overtone.main.re)}, Im ω=${compactNumber(row.overtone.main.im)}`;
+    buildOrderTable(row);
+    if (currentResult.cases.length < 2) {
+      renderOrderTrendChart(row);
     }
-    if (row.caseData.detailLoaded) {
-      App.Chart.renderPotentialChart(elements.chartWrap, row.caseData.plot);
-    }
-    requestCaseDetail(row.caseIndex);
   }
 
   function renderResult(result) {
     currentResult = result;
-    currentResult.cases = currentResult.cases.map((caseData) => Object.assign({}, caseData, { detailLoaded: false, detailPending: false }));
+    currentResult.cases = currentResult.cases.map((caseData) =>
+      Object.assign({}, caseData, { detailLoaded: Boolean(caseData.plot), detailPending: false, detailFailed: false })
+    );
     rebuildFlatRows();
     elements.summaryLine.textContent = `Рассчитано наборов параметров: ${result.cases.length}; строк в таблице: ${flatRows.length}.`;
     renderWarningStack(elements.globalWarnings, uniqueWarnings(result.cases.flatMap((item) => item.warnings)));
     buildResultsTable(result);
-    if (flatRows.length) {
-      selectRow(0);
+    renderBaseCase(0);
+    if (currentResult.cases.length > 1) {
+      renderModeScanChart();
     }
+    if (flatRows.length) {
+      selectRow(0, false);
+      return;
+    }
+    elements.selectionMeta.textContent = "Строка не выбрана.";
   }
 
   function runComputation() {
@@ -597,6 +750,7 @@
     setStatus("Запуск worker и подготовка расчёта");
     setProgress(0, 1);
     lastRunConfig = Object.assign({}, config);
+    const storePlots = estimateCaseCount(config) === 1;
     try {
       worker = createAppWorker();
     } catch (error) {
@@ -650,7 +804,7 @@
       type: "run",
       config: Object.assign({}, config, {
         precisionCheck: false,
-        storePlots: false
+        storePlots
       })
     });
   }
@@ -665,6 +819,9 @@
     elements.presetSelect.addEventListener("change", () => applyPreset(elements.presetSelect.value));
     elements.detectParameters.addEventListener("click", () => detectParameters());
     elements.runButton.addEventListener("click", runComputation);
+    elements.perturbationType.addEventListener("change", syncAngularConstraints);
+    elements.ellInput.addEventListener("input", syncAngularConstraints);
+    elements.overtoneInput.addEventListener("input", syncAngularConstraints);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
