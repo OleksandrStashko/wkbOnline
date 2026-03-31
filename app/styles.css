@@ -129,6 +129,12 @@ button {
   gap: 12px;
 }
 
+.subpanel-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
 .panel-head h2,
 .card-head h3,
 .subpanel-head h3 {
@@ -145,6 +151,12 @@ button {
   color: var(--ink-soft);
   font-size: 0.95rem;
   line-height: 1.45;
+}
+
+.selection-head-tools {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
 }
 
 .field,
@@ -215,6 +227,100 @@ select:focus {
   background: rgba(255, 255, 255, 0.46);
 }
 
+.formula-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.formula-preview-card {
+  display: grid;
+  gap: 8px;
+}
+
+.formula-preview-box {
+  min-height: 96px;
+  padding: 14px 16px;
+  border: 1px solid rgba(14, 102, 112, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  overflow-x: auto;
+}
+
+.formula-preview-box.invalid {
+  border-color: rgba(139, 45, 30, 0.22);
+  color: var(--warn);
+  background: rgba(250, 230, 221, 0.72);
+}
+
+.math-view {
+  font-size: 1.2rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.math-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.08em;
+}
+
+.math-frac {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  margin: 0 0.18em;
+  vertical-align: middle;
+}
+
+.math-frac-top,
+.math-frac-bottom {
+  display: block;
+  padding: 0 0.28em;
+  text-align: center;
+}
+
+.math-frac-top {
+  border-bottom: 1px solid currentColor;
+}
+
+.math-power {
+  display: inline-flex;
+  align-items: start;
+}
+
+.math-power sup {
+  font-size: 0.72em;
+  line-height: 1;
+  margin-left: 0.1em;
+}
+
+.math-fn {
+  font-variant-numeric: lining-nums;
+}
+
+.math-error {
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.help-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 44, 43, 0.08);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.help-item code {
+  display: block;
+  margin-bottom: 6px;
+}
+
 .parameter-list {
   display: grid;
   gap: 12px;
@@ -258,6 +364,44 @@ select:focus {
   padding: 12px 18px;
   cursor: pointer;
   transition: transform 120ms ease, filter 120ms ease;
+}
+
+.compact-button {
+  padding: 8px 14px;
+}
+
+.help-dialog {
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: min(920px, calc(100vw - 32px));
+  width: 100%;
+}
+
+.help-dialog::backdrop {
+  background: rgba(17, 26, 28, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.help-dialog-card {
+  padding: 22px;
+  border: 1px solid var(--edge);
+  border-radius: 24px;
+  background: var(--paper-strong);
+  box-shadow: var(--shadow);
+}
+
+.help-dialog-text {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.ghost-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+  transform: none;
+  filter: none;
 }
 
 .primary-button {
@@ -522,6 +666,11 @@ tbody tr.selected-row {
   }
 
   .case-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .formula-preview-grid,
+  .help-grid {
     grid-template-columns: 1fr;
   }
 

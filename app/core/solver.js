@@ -119,8 +119,7 @@
         continue;
       }
       const fProbe = safeValue(metric.f, probe);
-      const gProbe = safeValue(metric.g, probe);
-      if (fProbe && gProbe && fProbe.isPositive() && gProbe.isPositive()) {
+      if (fProbe && fProbe.isPositive()) {
         return root;
       }
     }
@@ -129,13 +128,11 @@
 
   function locateHorizon(metric, left, right, sampleCount, ctx) {
     const rootsF = findRoots(metric.f, left, right, sampleCount, ctx);
-    const rootsG = findRoots(metric.g, left, right, sampleCount, ctx);
-    const allRoots = App.Numerics.mergeClose(rootsF.concat(rootsG), ctx);
     return {
       rootsF,
-      rootsG,
-      allRoots,
-      outer: selectOuterHorizon(allRoots, metric, right, ctx)
+      rootsG: [],
+      allRoots: rootsF,
+      outer: selectOuterHorizon(rootsF, metric, right, ctx)
     };
   }
 
@@ -244,6 +241,14 @@
     };
   }
 
+  function relativeComplexDifference(ctx, left, right) {
+    return App.Numerics.dmax(
+      ctx,
+      App.Numerics.relativeDifference(ctx, left.re, right.re),
+      App.Numerics.relativeDifference(ctx, left.im, right.im)
+    );
+  }
+
   function assessWkbSeries(series, mainOrder, ctx, warnings) {
     if (mainOrder < 2) {
       return;
@@ -343,13 +348,29 @@
       const series = App.WKB.computeSeries(n, star, config.mainOrder, ctx);
       assessWkbSeries(series, config.mainOrder, ctx, warnings);
       const orders = {};
+      const orderAccuracy = {};
+      let previousOmega = null;
       for (const item of series.cumulative) {
         orders[item.order] = formatComplex(item.omega);
+        orderAccuracy[item.order] = previousOmega
+          ? relativeComplexDifference(ctx, item.omega, previousOmega).toString()
+          : null;
+        previousOmega = item.omega;
       }
+      const mainOmega = series.cumulative[series.cumulative.length - 1].omega;
+      const pade = series.pade.map((item) => ({
+        label: `Padé [${item.numeratorDegree}/${item.denominatorDegree}]`,
+        numeratorDegree: item.numeratorDegree,
+        denominatorDegree: item.denominatorDegree,
+        value: formatComplex(item.omega),
+        relativeToMain: relativeComplexDifference(ctx, item.omega, mainOmega).toString()
+      }));
       rows.push({
         n,
         main: orders[config.mainOrder],
-        orders
+        orders,
+        orderAccuracy,
+        pade
       });
     }
     if (config.overtoneMax > config.ell) {

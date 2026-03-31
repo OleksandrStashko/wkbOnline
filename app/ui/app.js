@@ -71,6 +71,22 @@
     }
   };
 
+  const helpItems = [
+    { expr: "sqrt(x)", text: "квадратный корень" },
+    { expr: "ln(x)", text: "натуральный логарифм" },
+    { expr: "log(x)", text: "то же, что ln(x)" },
+    { expr: "log(x, b)", text: "логарифм по основанию b" },
+    { expr: "exp(x)", text: "экспонента e^x" },
+    { expr: "sin(x), cos(x), tan(x)", text: "тригонометрические функции" },
+    { expr: "asin(x), acos(x), atan(x)", text: "обратные тригонометрические функции" },
+    { expr: "sinh(x), cosh(x), tanh(x)", text: "гиперболические функции" },
+    { expr: "asinh(x), acosh(x), atanh(x)", text: "обратные гиперболические функции" },
+    { expr: "abs(x)", text: "модуль" },
+    { expr: "min(a, b), max(a, b)", text: "минимум и максимум двух аргументов" },
+    { expr: "pow(x, y) или x^y", text: "степень" },
+    { expr: "pi, e", text: "математические константы" }
+  ];
+
   let worker = null;
   let detailWorker = null;
   let currentResult = null;
@@ -78,6 +94,7 @@
   let selectedRow = null;
   let lastRunConfig = null;
   let baseCaseIndex = null;
+  let metricRefreshTimer = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -91,6 +108,12 @@
     presetSelect: resolveElement("preset-select"),
     fExpression: resolveElement("f-expression"),
     gExpression: resolveElement("g-expression"),
+    fPreview: resolveElement("f-preview"),
+    gPreview: resolveElement("g-preview"),
+    openHelp: resolveElement("open-help"),
+    helpDialog: resolveElement("formula-help-dialog"),
+    closeHelp: resolveElement("close-help"),
+    formulaHelp: resolveElement("formula-help"),
     perturbationType: resolveElement("perturbation-type"),
     ellInput: resolveElement("ell-input"),
     overtoneInput: resolveElement("overtone-input"),
@@ -117,6 +140,7 @@
     caseSummaryWrap: resolveElement("case-summary-wrap", "diagnostics-box"),
     resultTableWrap: resolveElement("result-table-wrap"),
     selectionMeta: resolveElement("selection-meta"),
+    clearSelection: resolveElement("clear-selection"),
     orderTableWrap: resolveElement("order-table-wrap"),
     chartWrap: resolveElement("chart-wrap"),
     modeChartWrap: resolveElement("mode-chart-wrap")
@@ -134,11 +158,136 @@
     return value.toFixed(8).replace(/\.?0+$/, "");
   }
 
+  function formatRelative(text) {
+    if (text === null || text === undefined || text === "") {
+      return "—";
+    }
+    return compactNumber(text);
+  }
+
   function clampInteger(value, minimum) {
     if (!Number.isFinite(value)) {
       return minimum;
     }
     return Math.max(minimum, Math.floor(value));
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("\"", "&quot;");
+  }
+
+  function nodePrecedence(node) {
+    if (node.kind === "binary") {
+      if (node.op === "+" || node.op === "-") {
+        return 1;
+      }
+      if (node.op === "*" || node.op === "/") {
+        return 2;
+      }
+      if (node.op === "^") {
+        return 3;
+      }
+    }
+    if (node.kind === "unary") {
+      return 4;
+    }
+    return 5;
+  }
+
+  function wrapMath(html, required) {
+    return required ? `<span class="math-group">(${html})</span>` : html;
+  }
+
+  function renderMathNode(node, parentPrecedence, rightBranch) {
+    if (node.kind === "number") {
+      return escapeHtml(node.value);
+    }
+    if (node.kind === "identifier") {
+      return escapeHtml(node.name);
+    }
+    if (node.kind === "call") {
+      return `<span class="math-fn">${escapeHtml(node.name)}</span><span class="math-group">(${node.args.map((arg) => renderMathNode(arg, 0, false)).join(", ")})</span>`;
+    }
+    if (node.kind === "unary") {
+      const body = `${escapeHtml(node.op)}${renderMathNode(node.arg, 4, false)}`;
+      return wrapMath(body, nodePrecedence(node) < parentPrecedence);
+    }
+    if (node.kind === "binary") {
+      const own = nodePrecedence(node);
+      const left = renderMathNode(node.left, node.op === "^" ? own : own + (node.op === "/" ? 1 : 0), false);
+      const right = renderMathNode(node.right, node.op === "^" ? own : own + (node.op === "-" || node.op === "/" ? 1 : 0), true);
+      let body = "";
+      if (node.op === "/") {
+        body = `<span class="math-frac"><span class="math-frac-top">${left}</span><span class="math-frac-bottom">${right}</span></span>`;
+      } else if (node.op === "^") {
+        body = `<span class="math-power">${left}<sup>${right}</sup></span>`;
+      } else if (node.op === "*") {
+        body = `${left} <span>&middot;</span> ${right}`;
+      } else {
+        body = `${left} <span>${escapeHtml(node.op)}</span> ${right}`;
+      }
+      const needWrap = own < parentPrecedence || (rightBranch && node.op === "^" && own <= parentPrecedence);
+      return wrapMath(body, needWrap);
+    }
+    return "";
+  }
+
+  function renderExpressionPreview(text, container) {
+    const value = text.trim();
+    if (!value) {
+      container.className = "formula-preview-box invalid";
+      container.innerHTML = `<div class="math-error">Введите аналитическое выражение.</div>`;
+      return null;
+    }
+    try {
+      const ast = App.Parser.parseExpression(value);
+      container.className = "formula-preview-box";
+      container.innerHTML = `<div class="math-view">${renderMathNode(ast, 0, false)}</div>`;
+      return ast;
+    } catch (error) {
+      container.className = "formula-preview-box invalid";
+      container.innerHTML = `<div class="math-error">${escapeHtml(error.message || String(error))}</div>`;
+      return { error };
+    }
+  }
+
+  function renderFormulaHelp() {
+    elements.formulaHelp.innerHTML = helpItems
+      .map(
+        (item) => `
+          <div class="help-item">
+            <code>${escapeHtml(item.expr)}</code>
+            <div>${escapeHtml(item.text)}</div>
+          </div>
+        `
+      )
+      .join("");
+  }
+
+  function openHelpDialog() {
+    if (elements.helpDialog.open) {
+      return;
+    }
+    if (typeof elements.helpDialog.showModal === "function") {
+      elements.helpDialog.showModal();
+      return;
+    }
+    elements.helpDialog.setAttribute("open", "open");
+  }
+
+  function closeHelpDialog() {
+    if (!elements.helpDialog.open && !elements.helpDialog.hasAttribute("open")) {
+      return;
+    }
+    if (typeof elements.helpDialog.close === "function") {
+      elements.helpDialog.close();
+      return;
+    }
+    elements.helpDialog.removeAttribute("open");
   }
 
   function setStatus(text) {
@@ -259,12 +408,19 @@
     return specs;
   }
 
-  function detectParameters(overrideSpecs) {
+  function detectParameters(overrideSpecs, silent) {
+    const fResult = renderExpressionPreview(elements.fExpression.value, elements.fPreview);
+    const gResult = renderExpressionPreview(elements.gExpression.value, elements.gPreview);
+    const firstError = fResult && fResult.error ? fResult.error : gResult && gResult.error ? gResult.error : null;
+    if (firstError) {
+      if (!silent) {
+        showInputError(firstError.message || String(firstError));
+      }
+      return null;
+    }
     clearInputError();
     try {
-      const fAst = App.Parser.parseExpression(elements.fExpression.value.trim());
-      const gAst = App.Parser.parseExpression(elements.gExpression.value.trim());
-      const names = App.Parser.collectParameters([fAst, gAst]);
+      const names = App.Parser.collectParameters([fResult, gResult]);
       const specMap = overrideSpecs || gatherParameterSpecs();
       elements.parameterList.innerHTML = "";
       if (!names.length) {
@@ -277,9 +433,22 @@
       }
       return names;
     } catch (error) {
-      showInputError(error.message || String(error));
+      if (!silent) {
+        showInputError(error.message || String(error));
+      }
       return null;
     }
+  }
+
+  function scheduleMetricRefresh() {
+    if (metricRefreshTimer) {
+      clearTimeout(metricRefreshTimer);
+    }
+    const specMap = gatherParameterSpecs();
+    metricRefreshTimer = setTimeout(() => {
+      metricRefreshTimer = null;
+      detectParameters(specMap, true);
+    }, 220);
   }
 
   function syncAngularConstraints() {
@@ -312,7 +481,7 @@
     elements.peakSamplesInput.value = values.peakSamples;
     elements.showAllOrders.checked = values.showAllOrders !== false;
     syncAngularConstraints();
-    detectParameters(values.parameterSpecs);
+    detectParameters(values.parameterSpecs, true);
   }
 
   function collectConfig() {
@@ -414,6 +583,7 @@
     setEmptyState(elements.chartWrap, "График потенциала появится сразу после расчёта базового случая.", "chart-wrap");
     setEmptyState(elements.modeChartWrap, "График мод появится после расчёта: для скана по параметру или по клику на обертон.", "chart-wrap");
     elements.selectionMeta.textContent = "Строка не выбрана.";
+    elements.clearSelection.disabled = true;
   }
 
   function buildResultsTable(result) {
@@ -456,29 +626,44 @@
       setEmptyState(elements.orderTableWrap, "Показ по порядкам отключён.", "table-wrap");
       return;
     }
-    const rows = resultRow.caseData.orders
+    const wkbRows = resultRow.caseData.orders
       .map((order) => {
         const value = resultRow.overtone.orders[order];
+        const diff = resultRow.overtone.orderAccuracy[order];
         return `
           <tr>
-            <td>${order}</td>
+            <td>WKB ${order}</td>
             <td title="${value.re}">${compactNumber(value.re)}</td>
             <td title="${value.im}">${compactNumber(value.im)}</td>
+            <td title="${diff || ""}">${formatRelative(diff)}</td>
           </tr>
         `;
       })
+      .join("");
+    const padeRows = (resultRow.overtone.pade || [])
+      .map(
+        (item) => `
+          <tr>
+            <td>${item.label}</td>
+            <td title="${item.value.re}">${compactNumber(item.value.re)}</td>
+            <td title="${item.value.im}">${compactNumber(item.value.im)}</td>
+            <td title="${item.relativeToMain}">${formatRelative(item.relativeToMain)}</td>
+          </tr>
+        `
+      )
       .join("");
     elements.orderTableWrap.className = "table-wrap";
     elements.orderTableWrap.innerHTML = `
       <table>
         <thead>
           <tr>
-            <th>Порядок</th>
+            <th>Схема</th>
             <th>Re ω</th>
             <th>Im ω</th>
+            <th>Отн. отличие</th>
           </tr>
         </thead>
-        <tbody>${rows}</tbody>
+        <tbody>${wkbRows}${padeRows}</tbody>
       </table>
     `;
   }
@@ -701,13 +886,33 @@
     });
   }
 
+  function clearSelection() {
+    selectedRow = null;
+    if (currentResult) {
+      buildResultsTable(currentResult);
+    }
+    elements.selectionMeta.textContent = "Строка не выбрана.";
+    elements.clearSelection.disabled = true;
+    setEmptyState(elements.orderTableWrap, "Выберите строку таблицы, чтобы сравнить порядки WKB и Padé.", "table-wrap");
+    if (currentResult && currentResult.cases.length > 1) {
+      renderModeScanChart();
+    } else {
+      setEmptyState(elements.modeChartWrap, "Щёлкните по строке таблицы, чтобы построить график моды по порядку WKB.", "chart-wrap");
+    }
+  }
+
   function selectRow(index, loadDetails) {
+    if (selectedRow === index) {
+      clearSelection();
+      return;
+    }
     selectedRow = index;
     buildResultsTable(currentResult);
     const row = flatRows[index];
     if (!row) {
       return;
     }
+    elements.clearSelection.disabled = false;
     elements.selectionMeta.textContent = `Выбрано: n=${row.overtone.n}, Re ω=${compactNumber(row.overtone.main.re)}, Im ω=${compactNumber(row.overtone.main.im)}`;
     buildOrderTable(row);
     if (currentResult.cases.length < 2) {
@@ -817,17 +1022,29 @@
 
   function attachEvents() {
     elements.presetSelect.addEventListener("change", () => applyPreset(elements.presetSelect.value));
-    elements.detectParameters.addEventListener("click", () => detectParameters());
+    elements.detectParameters.addEventListener("click", () => detectParameters(undefined, false));
     elements.runButton.addEventListener("click", runComputation);
     elements.perturbationType.addEventListener("change", syncAngularConstraints);
     elements.ellInput.addEventListener("input", syncAngularConstraints);
     elements.overtoneInput.addEventListener("input", syncAngularConstraints);
+    elements.fExpression.addEventListener("input", scheduleMetricRefresh);
+    elements.gExpression.addEventListener("input", scheduleMetricRefresh);
+    elements.clearSelection.addEventListener("click", clearSelection);
+    elements.openHelp.addEventListener("click", openHelpDialog);
+    elements.closeHelp.addEventListener("click", closeHelpDialog);
+    elements.helpDialog.addEventListener("click", (event) => {
+      if (event.target === elements.helpDialog) {
+        closeHelpDialog();
+      }
+    });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    renderFormulaHelp();
     populatePresetSelect();
     attachEvents();
     applyPreset("schwarzschild");
+    elements.clearSelection.disabled = true;
     if (window.location.protocol === "file:") {
       setStatus("Открыт локальный файл; worker запускается в совместимом режиме");
     }

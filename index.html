@@ -4,11 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>QNM WKB Lab</title>
-    <link rel="stylesheet" href="app/styles.css?v=20260331c">
+    <link rel="stylesheet" href="app/styles.css?v=20260331e">
     <script src="app/core/namespace.js"></script>
     <script src="app/core/parser.js"></script>
-    <script src="app/ui/chart.js?v=20260331c" defer></script>
-    <script src="app/ui/app.js?v=20260331c" defer></script>
+    <script src="app/ui/chart.js?v=20260331e" defer></script>
+    <script src="app/ui/app.js?v=20260331e" defer></script>
   </head>
   <body>
     <div class="page-shell">
@@ -47,6 +47,26 @@
             <span class="field-label">g(r)</span>
             <textarea id="g-expression" rows="3" spellcheck="false"></textarea>
           </label>
+
+          <div class="subpanel">
+            <div class="subpanel-head">
+              <h3>Предпросмотр формул</h3>
+              <div class="subpanel-actions">
+                <p>Обновляется автоматически при вводе.</p>
+                <button id="open-help" class="ghost-button compact-button" type="button">Справка</button>
+              </div>
+            </div>
+            <div class="formula-preview-grid">
+              <div class="formula-preview-card">
+                <div class="field-label">f(r)</div>
+                <div id="f-preview" class="formula-preview-box"></div>
+              </div>
+              <div class="formula-preview-card">
+                <div class="field-label">g(r)</div>
+                <div id="g-preview" class="formula-preview-box"></div>
+              </div>
+            </div>
+          </div>
 
           <div class="field-group">
             <label class="field">
@@ -179,7 +199,10 @@
             <div class="card">
               <div class="card-head">
                 <h3>Выбранная мода</h3>
-                <p id="selection-meta">Строка не выбрана.</p>
+                <div class="selection-head-tools">
+                  <p id="selection-meta">Строка не выбрана.</p>
+                  <button id="clear-selection" class="ghost-button compact-button" type="button">Закрыть</button>
+                </div>
               </div>
               <div id="order-table-wrap" class="table-wrap empty-state">Щёлкните по строке таблицы, чтобы сравнить порядки.</div>
             </div>
@@ -187,8 +210,8 @@
 
           <div class="card chart-card">
             <div class="card-head">
-              <h3>Мода как функция параметра</h3>
-              <p>График строится при скане одного параметра для выбранного обертона.</p>
+              <h3>График мод</h3>
+              <p>Для одного случая показывает зависимость от порядка WKB, для скана одного параметра показывает все ветви n = 0, ..., N.</p>
             </div>
             <div id="mode-chart-wrap" class="chart-wrap empty-state">График мод появится при скане одного параметра.</div>
           </div>
@@ -203,5 +226,15 @@
         </section>
       </main>
     </div>
+    <dialog id="formula-help-dialog" class="help-dialog">
+      <div class="help-dialog-card">
+        <div class="card-head">
+          <h3>Справка по формулам</h3>
+          <button id="close-help" class="ghost-button compact-button" type="button">Закрыть</button>
+        </div>
+        <p class="help-dialog-text">Поддерживаются стандартные аналитические записи для f(r) и g(r).</p>
+        <div id="formula-help" class="help-grid"></div>
+      </div>
+    </dialog>
   </body>
 </html>

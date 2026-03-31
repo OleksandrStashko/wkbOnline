@@ -558,6 +558,8 @@
     parseExpression,
     collectParameters,
     createEvaluator,
-    createDualEvaluator
+    createDualEvaluator,
+    functionNames: Array.from(FUNCTIONS).sort((a, b) => a.localeCompare(b, "ru")),
+    constantNames: Array.from(CONSTANTS).sort((a, b) => a.localeCompare(b, "ru"))
   };
 })();
