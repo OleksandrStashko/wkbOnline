@@ -1,0 +1,1 @@
+self.QNMApp = self.QNMApp || {};

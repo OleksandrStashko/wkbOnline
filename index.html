@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>QNM WKB Lab</title>
+    <link rel="stylesheet" href="app/styles.css">
+    <script src="app/core/namespace.js"></script>
+    <script src="app/core/parser.js"></script>
+    <script src="app/ui/chart.js" defer></script>
+    <script src="app/ui/app.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Локальный научный расчёт</p>
+          <h1>Квазинормальные моды сферически-симметричных метрик</h1>
+          <p class="hero-text">
+            Приложение строит эффективный потенциал автоматически, ищет внешний горизонт,
+            локализует барьерный максимум и вычисляет QNM методом WKB до 13-го порядка.
+          </p>
+        </div>
+        <div class="hero-math">
+          <div class="formula">ds² = -f(r) dt² + dr² / g(r) + r² dΩ²</div>
+          <div class="formula">D* = √(f g) d/dr</div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel control-panel">
+          <div class="panel-head">
+            <h2>Постановка задачи</h2>
+            <button id="detect-parameters" class="ghost-button" type="button">Обновить параметры</button>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Пресет</span>
+            <select id="preset-select"></select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">f(r)</span>
+            <textarea id="f-expression" rows="3" spellcheck="false"></textarea>
+          </label>
+
+          <label class="field">
+            <span class="field-label">g(r)</span>
+            <textarea id="g-expression" rows="3" spellcheck="false"></textarea>
+          </label>
+
+          <div class="field-group">
+            <label class="field">
+              <span class="field-label">Тип возмущения</span>
+              <select id="perturbation-type">
+                <option value="scalar">Скалярное поле</option>
+                <option value="electromagnetic">Электромагнитное поле</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">ℓ</span>
+              <input id="ell-input" type="number" min="0" step="1" value="2">
+            </label>
+
+            <label class="field">
+              <span class="field-label">Макс. обертон N</span>
+              <input id="overtone-input" type="number" min="0" step="1" value="2">
+            </label>
+          </div>
+
+          <div class="field-group">
+            <label class="field">
+              <span class="field-label">Основной порядок WKB</span>
+              <input id="order-input" type="number" min="1" max="13" step="1" value="6">
+            </label>
+
+            <label class="field checkbox-field">
+              <input id="show-all-orders" type="checkbox" checked>
+              <span>Показывать все порядки до выбранного</span>
+            </label>
+          </div>
+
+          <div class="subpanel">
+            <div class="subpanel-head">
+              <h3>Параметры метрики</h3>
+              <p>Параметры определяются автоматически из f(r) и g(r), кроме r.</p>
+            </div>
+            <div id="parameter-list" class="parameter-list"></div>
+          </div>
+
+          <div class="subpanel">
+            <div class="subpanel-head">
+              <h3>Численные настройки</h3>
+            </div>
+
+            <div class="field-group three-columns">
+              <label class="field">
+                <span class="field-label">Точность Decimal</span>
+                <input id="precision-input" type="number" min="40" step="1" value="70">
+              </label>
+
+              <label class="field">
+                <span class="field-label">Узлы Чебышёва</span>
+                <input id="spectral-nodes-input" type="number" min="32" max="160" step="2" value="64">
+              </label>
+
+              <label class="field">
+                <span class="field-label">Точек графика</span>
+                <input id="plot-samples-input" type="number" min="31" max="161" step="2" value="61">
+              </label>
+            </div>
+
+            <div class="field-group three-columns">
+              <label class="field">
+                <span class="field-label">r_min поиска</span>
+                <input id="r-min-input" type="text" value="0.5">
+              </label>
+
+              <label class="field">
+                <span class="field-label">r_max поиска</span>
+                <input id="r-max-input" type="text" value="60">
+              </label>
+
+              <label class="field">
+                <span class="field-label">Сетка горизонта</span>
+                <input id="horizon-samples-input" type="number" min="80" step="20" value="320">
+              </label>
+            </div>
+
+            <div class="field-group">
+              <label class="field">
+                <span class="field-label">Сетка максимума</span>
+                <input id="peak-samples-input" type="number" min="120" step="20" value="420">
+              </label>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="run-button" class="primary-button" type="button">Вычислить QNM</button>
+            <div id="status-line" class="status-line">Ожидание запуска</div>
+          </div>
+
+          <div class="progress-wrap">
+            <div class="progress-track">
+              <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <div id="progress-text" class="progress-text">0%</div>
+          </div>
+
+          <div id="input-error" class="warning-box hidden"></div>
+        </section>
+
+        <section class="panel output-panel">
+          <div class="panel-head">
+            <h2>Результаты</h2>
+            <div id="summary-line" class="summary-line">Расчёт ещё не выполнялся.</div>
+          </div>
+
+          <div id="global-warnings" class="warning-stack"></div>
+
+          <div class="result-grid">
+            <div class="card">
+              <div class="card-head">
+                <h3>Таблица частот</h3>
+                <p>Щёлкните по строке, чтобы открыть график и порядок-за-порядком.</p>
+              </div>
+              <div id="result-table-wrap" class="table-wrap empty-state">
+                Нет данных.
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Детали выбранного случая</h3>
+                <p id="selection-meta">Строка не выбрана.</p>
+              </div>
+              <div id="case-warnings" class="warning-stack compact"></div>
+              <div id="diagnostics-box" class="diagnostics-box empty-state">Нет диагностических данных.</div>
+              <div id="order-table-wrap" class="table-wrap empty-state">Нет данных по порядкам.</div>
+            </div>
+          </div>
+
+          <div class="card chart-card">
+            <div class="card-head">
+              <h3>Потенциал V(r) вблизи пика</h3>
+              <p>Отображается для выбранного набора параметров.</p>
+            </div>
+            <div id="chart-wrap" class="chart-wrap empty-state">График станет доступен после расчёта.</div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
