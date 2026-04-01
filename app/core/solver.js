@@ -26,7 +26,7 @@
       gExpression: rawConfig.gExpression,
       perturbationType: rawConfig.perturbationType,
       ell,
-      overtoneMax: Math.max(0, Math.min(ell, Math.floor(Number(rawConfig.overtoneMax)))),
+      overtoneMax: Math.max(0, Math.floor(Number(rawConfig.overtoneMax))),
       mainOrder: Math.max(1, Math.min(13, Number(rawConfig.mainOrder))),
       showAllOrders: Boolean(rawConfig.showAllOrders),
       precision: Math.max(40, Number(rawConfig.precision)),
@@ -57,7 +57,7 @@
     const entries = parameterNames.map((name) => {
       const spec = parameterSpecs[name];
       if (!spec) {
-        throw new Error("Не заданы значения или диапазон для параметра \"" + name + "\".");
+        throw new Error(`No value or scan range was provided for parameter "${name}".`);
       }
       return {
         name,
@@ -164,11 +164,11 @@
 
   function refinePeak(potential, coarse, ctx) {
     if (!coarse.candidates.length) {
-      throw new Error("Вне горизонта не найден барьерный максимум эффективного потенциала.");
+      throw new Error("No barrier maximum of the effective potential was found outside the horizon.");
     }
     const best = coarse.candidates.reduce((current, candidate) => (candidate.value.greaterThan(current.value) ? candidate : current));
     if (best.index <= 0 || best.index >= coarse.points.length - 1) {
-      throw new Error("Максимум потенциала оказался на границе исследуемой области.");
+      throw new Error("The potential maximum lies on the boundary of the search interval.");
     }
     const refined = App.Numerics.goldenMaximum(
       potential.valueAt,
@@ -224,8 +224,9 @@
   function buildPlotData(metric, potential, horizonPoint, domainLeft, domainRight, plotSamples, ctx) {
     const plotRight = App.Numerics.dmin(ctx, domainRight, horizonPoint.plus(new ctx.D("10")));
     const count = plotSamples % 2 === 0 ? plotSamples + 1 : plotSamples;
-    const grid = App.Numerics.buildLinearGrid(domainLeft, plotRight, count, ctx);
-    const values = grid.map((point) => potential.valueAt(point));
+    const plotLeft = horizonPoint;
+    const grid = App.Numerics.buildLinearGrid(plotLeft, plotRight, count, ctx);
+    const values = grid.map((point, index) => (index === 0 ? ctx.zero : potential.valueAt(point)));
     return {
       x: grid.map((value) => value.toString()),
       potential: values.map((value) => value.toString()),
@@ -253,21 +254,11 @@
     if (mainOrder < 2) {
       return;
     }
-    const current = series.cumulative[mainOrder - 1].omega;
-    const previous = series.cumulative[mainOrder - 2].omega;
-    const drift = App.Numerics.dmax(
-      ctx,
-      App.Numerics.relativeDifference(ctx, current.re, previous.re),
-      App.Numerics.relativeDifference(ctx, current.im, previous.im)
-    );
-    if (drift.greaterThan(ctx.ten.pow(-Math.max(4, Math.floor(ctx.precision / 5))))) {
-      uniquePush(warnings, "Сходимость WKB по порядку слабая: результат заметно меняется между соседними порядками.");
-    }
     if (series.contributions.length >= 2) {
       const last = series.contributions[series.contributions.length - 1].abs(ctx);
       const prev = series.contributions[series.contributions.length - 2].abs(ctx);
       if (last.greaterThanOrEqualTo(prev)) {
-        uniquePush(warnings, "Последний вклад WKB не меньше предыдущего; асимптотическая серия ведёт себя неустойчиво.");
+        uniquePush(warnings, "The last WKB contribution is not smaller than the previous one; the asymptotic series looks unstable.");
       }
     }
   }
@@ -275,18 +266,18 @@
   function solveSingleCase(parsed, config, params, ctx, includePlot) {
     const warnings = [];
     if (config.perturbationType === "electromagnetic" && config.ell < 1) {
-      throw new Error("Для электромагнитных возмущений требуется ℓ ≥ 1.");
+      throw new Error("Electromagnetic perturbations require ell >= 1.");
     }
     const metric = App.Potential.createMetricModel(parsed.fAst, parsed.gAst, params, ctx);
     const potential = App.Potential.createPotentialModel(metric, config.perturbationType, config.ell, ctx);
     const searchLeft = new ctx.D(config.rMin);
     const searchRight = new ctx.D(config.rMax);
     if (!searchLeft.isPositive() || !searchRight.greaterThan(searchLeft)) {
-      throw new Error("Требуется положительный радиальный интервал поиска с r_max > r_min.");
+      throw new Error("A positive radial search interval with r_max > r_min is required.");
     }
     const horizon = locateHorizon(metric, searchLeft, searchRight, config.horizonSamples, ctx);
     if (!horizon.outer) {
-      throw new Error("Не удалось найти внешний горизонт в заданном радиальном интервале.");
+      throw new Error("Could not locate the outer horizon in the requested radial interval.");
     }
     const domainGap = App.Numerics.dmax(
       ctx,
@@ -296,15 +287,15 @@
     const domainLeft = horizon.outer.plus(domainGap);
     const domainRight = searchRight;
     if (!domainRight.greaterThan(domainLeft)) {
-      throw new Error("После внешнего горизонта не осталось доступной области поиска.");
+      throw new Error("No searchable domain remains outside the outer horizon.");
     }
     const coarsePeak = findPeakCandidates(potential, domainLeft, domainRight, config.peakSamples, ctx);
     if (coarsePeak.candidates.length > 1) {
-      uniquePush(warnings, "Найдено несколько локальных экстремумов потенциала; выбран глобальный максимум.");
+      uniquePush(warnings, "Several local extrema of the potential were found; the global maximum was selected.");
     }
     const peak = refinePeak(potential, coarsePeak, ctx);
     if (!peak.value.isPositive()) {
-      throw new Error("Внешний барьер потенциала отсутствует или неположителен.");
+      throw new Error("The outer potential barrier is absent or non-positive.");
     }
     const maxRequestedOrder = config.mainOrder;
     const maxDerivative = 2 * maxRequestedOrder;
@@ -322,22 +313,22 @@
       }
     );
     if (spectral.stability.greaterThan(ctx.ten.pow(-Math.max(6, Math.floor(ctx.precision / 4))))) {
-      uniquePush(warnings, "Высокие производные зависят от разрешения спектральной сетки.");
+      uniquePush(warnings, "High-order derivatives depend noticeably on the spectral resolution.");
     }
     if (spectral.tailRatio.greaterThan(ctx.ten.pow(-Math.max(6, Math.floor(ctx.precision / 4))))) {
-      uniquePush(warnings, "Спектральное окно может быть слишком широким или недостаточно гладким.");
+      uniquePush(warnings, "The spectral window may be too wide or the local profile may be insufficiently smooth.");
     }
     const potentialJet = spectral.jet.slice(0, maxDerivative + 1);
     potentialJet[0] = peak.value;
     const derivativeTolerance = ctx.ten.pow(-Math.max(6, Math.floor(ctx.precision / 4)));
     if (App.Numerics.relativeDifference(ctx, potentialJet[1], ctx.zero).greaterThan(derivativeTolerance)) {
-      uniquePush(warnings, "Численно первая производная в точке пика не зануляется с ожидаемой точностью.");
+      uniquePush(warnings, "Numerically, the first derivative at the peak does not vanish with the expected accuracy.");
     }
     potentialJet[1] = ctx.zero;
     const metricJets = metric.jetsAt(peak.point, maxDerivative);
     const star = App.Operator.tortoiseDerivatives(potentialJet, metricJets.s, maxDerivative, ctx).values;
     if (!star[2].isNegative()) {
-      throw new Error("В точке предполагаемого пика получено V''(r*) ≥ 0, барьерный максимум недействителен.");
+      throw new Error("At the candidate peak, V''(r*) >= 0 was obtained, so the barrier maximum is invalid.");
     }
     const rows = [];
     const orderList = [];
@@ -359,7 +350,7 @@
       }
       const mainOmega = series.cumulative[series.cumulative.length - 1].omega;
       const pade = series.pade.map((item) => ({
-        label: `Padé [${item.numeratorDegree}/${item.denominatorDegree}]`,
+        label: `Pade [${item.numeratorDegree}/${item.denominatorDegree}]`,
         numeratorDegree: item.numeratorDegree,
         denominatorDegree: item.denominatorDegree,
         value: formatComplex(item.omega),
@@ -374,7 +365,7 @@
       });
     }
     if (config.overtoneMax > config.ell) {
-      uniquePush(warnings, "Число обертонов превышает ℓ; для высоких n надёжность WKB обычно ухудшается.");
+      uniquePush(warnings, "The overtone count exceeds ell; WKB reliability usually degrades at high n.");
     }
     let plot = null;
     if (includePlot) {
@@ -407,7 +398,7 @@
     if (config.precisionCheck) {
       sensitivity = precisionSensitivity(parsed, config, params, result, false);
       if (new ctx.D(sensitivity).greaterThan(ctx.ten.pow(-Math.max(5, Math.floor(ctx.precision / 5))))) {
-        uniquePush(result.warnings, "Результат чувствителен к повышению рабочей точности.");
+        uniquePush(result.warnings, "The result is sensitive to an increase in the working precision.");
       }
     }
     result.precisionSensitivity = sensitivity;
@@ -432,7 +423,7 @@
     const parsed = parseExpressions(config);
     const grid = buildParameterGrid(parsed.parameterNames, config.parameterSpecs, ctx);
     if (!grid.length) {
-      throw new Error("Не удалось построить параметрическую сетку.");
+      throw new Error("Could not build the parameter grid.");
     }
     const cases = [];
     for (let index = 0; index < grid.length; index += 1) {

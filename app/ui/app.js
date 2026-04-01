@@ -3,10 +3,11 @@
 
   const presets = {
     custom: {
-      label: "Пользовательский",
+      label: "Custom",
       values: {
         fExpression: "1 - 2*M/r",
         gExpression: "1 - 2*M/r",
+        sameMetric: true,
         perturbationType: "scalar",
         ell: 2,
         overtoneMax: 2,
@@ -25,10 +26,11 @@
       }
     },
     schwarzschild: {
-      label: "Шварцшильд",
+      label: "Schwarzschild",
       values: {
         fExpression: "1 - 2*M/r",
         gExpression: "1 - 2*M/r",
+        sameMetric: true,
         perturbationType: "scalar",
         ell: 2,
         overtoneMax: 2,
@@ -47,10 +49,11 @@
       }
     },
     reissnerNordstrom: {
-      label: "Рейсснер-Нордстрём",
+      label: "Reissner-Nordstrom",
       values: {
         fExpression: "1 - 2*M/r + Q^2/r^2",
         gExpression: "1 - 2*M/r + Q^2/r^2",
+        sameMetric: true,
         perturbationType: "scalar",
         ell: 2,
         overtoneMax: 2,
@@ -72,19 +75,19 @@
   };
 
   const helpItems = [
-    { expr: "sqrt(x)", text: "квадратный корень" },
-    { expr: "ln(x)", text: "натуральный логарифм" },
-    { expr: "log(x)", text: "то же, что ln(x)" },
-    { expr: "log(x, b)", text: "логарифм по основанию b" },
-    { expr: "exp(x)", text: "экспонента e^x" },
-    { expr: "sin(x), cos(x), tan(x)", text: "тригонометрические функции" },
-    { expr: "asin(x), acos(x), atan(x)", text: "обратные тригонометрические функции" },
-    { expr: "sinh(x), cosh(x), tanh(x)", text: "гиперболические функции" },
-    { expr: "asinh(x), acosh(x), atanh(x)", text: "обратные гиперболические функции" },
-    { expr: "abs(x)", text: "модуль" },
-    { expr: "min(a, b), max(a, b)", text: "минимум и максимум двух аргументов" },
-    { expr: "pow(x, y) или x^y", text: "степень" },
-    { expr: "pi, e", text: "математические константы" }
+    { expr: "sqrt(x)", text: "square root" },
+    { expr: "ln(x)", text: "natural logarithm" },
+    { expr: "log(x)", text: "same as ln(x)" },
+    { expr: "log(x, b)", text: "logarithm of x with base b" },
+    { expr: "exp(x)", text: "exponential e^x" },
+    { expr: "sin(x), cos(x), tan(x)", text: "trigonometric functions" },
+    { expr: "asin(x), acos(x), atan(x)", text: "inverse trigonometric functions" },
+    { expr: "sinh(x), cosh(x), tanh(x)", text: "hyperbolic functions" },
+    { expr: "asinh(x), acosh(x), atanh(x)", text: "inverse hyperbolic functions" },
+    { expr: "abs(x)", text: "absolute value" },
+    { expr: "min(a, b), max(a, b)", text: "minimum and maximum of two arguments" },
+    { expr: "pow(x, y) or x^y", text: "power" },
+    { expr: "pi, e", text: "mathematical constants" }
   ];
 
   let worker = null;
@@ -95,6 +98,7 @@
   let lastRunConfig = null;
   let baseCaseIndex = null;
   let metricRefreshTimer = null;
+  const workerVersion = "20260331i";
 
   function $(id) {
     return document.getElementById(id);
@@ -106,6 +110,7 @@
 
   const elements = {
     presetSelect: resolveElement("preset-select"),
+    sameMetricToggle: resolveElement("same-metric-toggle"),
     fExpression: resolveElement("f-expression"),
     gExpression: resolveElement("g-expression"),
     fPreview: resolveElement("f-preview"),
@@ -160,7 +165,7 @@
 
   function formatRelative(text) {
     if (text === null || text === undefined || text === "") {
-      return "—";
+      return "--";
     }
     return compactNumber(text);
   }
@@ -178,6 +183,22 @@
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll("\"", "&quot;");
+  }
+
+  function isSameMetricMode() {
+    return Boolean(elements.sameMetricToggle.checked);
+  }
+
+  function syncSameMetricState() {
+    const same = isSameMetricMode();
+    if (same) {
+      elements.gExpression.value = elements.fExpression.value;
+    }
+    elements.gExpression.disabled = same;
+    const card = elements.gExpression.closest(".editor-card");
+    if (card) {
+      card.classList.toggle("mirrored-editor", same);
+    }
   }
 
   function nodePrecedence(node) {
@@ -240,7 +261,7 @@
     const value = text.trim();
     if (!value) {
       container.className = "formula-preview-box invalid";
-      container.innerHTML = `<div class="math-error">Введите аналитическое выражение.</div>`;
+      container.innerHTML = `<div class="math-error">Enter an analytic expression.</div>`;
       return null;
     }
     try {
@@ -336,25 +357,25 @@
       <div class="parameter-row-top">
         <div class="parameter-name">${name}</div>
         <select class="param-mode">
-          <option value="value">Фиксированное значение</option>
-          <option value="range">Диапазон</option>
+          <option value="value">Fixed value</option>
+          <option value="range">Range</option>
         </select>
       </div>
       <div class="parameter-controls">
         <label class="field">
-          <span class="field-label">Значение</span>
+          <span class="field-label">Value</span>
           <input class="param-value" type="text">
         </label>
         <label class="field">
-          <span class="field-label">Начало</span>
+          <span class="field-label">Start</span>
           <input class="param-start" type="text">
         </label>
         <label class="field">
-          <span class="field-label">Конец</span>
+          <span class="field-label">End</span>
           <input class="param-end" type="text">
         </label>
         <label class="field">
-          <span class="field-label">Число точек</span>
+          <span class="field-label">Points</span>
           <input class="param-count" type="number" min="2" step="1">
         </label>
       </div>
@@ -409,8 +430,13 @@
   }
 
   function detectParameters(overrideSpecs, silent) {
+    syncSameMetricState();
     const fResult = renderExpressionPreview(elements.fExpression.value, elements.fPreview);
-    const gResult = renderExpressionPreview(elements.gExpression.value, elements.gPreview);
+    const gSource = isSameMetricMode() ? elements.fExpression.value : elements.gExpression.value;
+    if (isSameMetricMode()) {
+      elements.gExpression.value = gSource;
+    }
+    const gResult = renderExpressionPreview(gSource, elements.gPreview);
     const firstError = fResult && fResult.error ? fResult.error : gResult && gResult.error ? gResult.error : null;
     if (firstError) {
       if (!silent) {
@@ -424,7 +450,7 @@
       const specMap = overrideSpecs || gatherParameterSpecs();
       elements.parameterList.innerHTML = "";
       if (!names.length) {
-        elements.parameterList.innerHTML = `<div class="empty-state">Параметры, кроме r, не обнаружены.</div>`;
+        elements.parameterList.innerHTML = `<div class="empty-state">No parameters other than r were detected.</div>`;
         return names;
       }
       for (const name of names) {
@@ -444,6 +470,9 @@
     if (metricRefreshTimer) {
       clearTimeout(metricRefreshTimer);
     }
+    if (isSameMetricMode()) {
+      elements.gExpression.value = elements.fExpression.value;
+    }
     const specMap = gatherParameterSpecs();
     metricRefreshTimer = setTimeout(() => {
       metricRefreshTimer = null;
@@ -459,8 +488,8 @@
     elements.ellInput.min = String(ellMinimum);
     elements.ellInput.value = String(ell);
     elements.overtoneInput.min = "0";
-    elements.overtoneInput.max = String(ell);
-    elements.overtoneInput.value = String(Math.min(overtone, ell));
+    elements.overtoneInput.removeAttribute("max");
+    elements.overtoneInput.value = String(overtone);
   }
 
   function applyPreset(key) {
@@ -468,6 +497,9 @@
     const values = preset.values;
     elements.fExpression.value = values.fExpression;
     elements.gExpression.value = values.gExpression;
+    elements.sameMetricToggle.checked = values.sameMetric !== undefined
+      ? values.sameMetric
+      : values.fExpression.trim() === values.gExpression.trim();
     elements.perturbationType.value = values.perturbationType;
     elements.ellInput.value = values.ell;
     elements.overtoneInput.value = values.overtoneMax;
@@ -480,6 +512,7 @@
     elements.horizonSamplesInput.value = values.horizonSamples;
     elements.peakSamplesInput.value = values.peakSamples;
     elements.showAllOrders.checked = values.showAllOrders !== false;
+    syncSameMetricState();
     syncAngularConstraints();
     detectParameters(values.parameterSpecs, true);
   }
@@ -487,16 +520,18 @@
   function collectConfig() {
     const names = detectParameters();
     if (!names) {
-      throw new Error("Не удалось разобрать выражения метрики.");
+      throw new Error("Could not parse the metric expressions.");
     }
     syncAngularConstraints();
     const perturbationType = elements.perturbationType.value;
     const ellMinimum = perturbationType === "electromagnetic" ? 1 : 0;
     const ell = clampInteger(Number(elements.ellInput.value), ellMinimum);
-    const overtoneMax = Math.min(clampInteger(Number(elements.overtoneInput.value), 0), ell);
+    const overtoneMax = clampInteger(Number(elements.overtoneInput.value), 0);
+    const fExpression = elements.fExpression.value.trim();
+    const gExpression = isSameMetricMode() ? fExpression : elements.gExpression.value.trim();
     return {
-      fExpression: elements.fExpression.value.trim(),
-      gExpression: elements.gExpression.value.trim(),
+      fExpression,
+      gExpression,
       perturbationType,
       ell,
       overtoneMax,
@@ -525,13 +560,13 @@
 
   function workerStartupErrorText() {
     if (window.location.protocol === "file:") {
-      return "Worker не запустился при открытии через file://. Если браузер блокирует запуск, откройте проект через локальный сервер: python -m http.server 8000 и затем http://localhost:8000.";
+      return "The worker did not start from file://. If the browser blocks workers in local-file mode, serve the project locally with: python -m http.server 8000 and then open http://localhost:8000.";
     }
-    return "Не удалось запустить worker. Проверьте консоль браузера и повторите запуск.";
+    return "Could not start the worker. Check the browser console and try again.";
   }
 
   function createAppWorker() {
-    const scriptUrl = new URL("app/worker/worker.js", window.location.href).href;
+    const scriptUrl = new URL(`app/worker/worker.js?v=${workerVersion}`, window.location.href).href;
     if (window.location.protocol !== "file:") {
       return new Worker(scriptUrl);
     }
@@ -573,16 +608,16 @@
     flatRows = [];
     selectedRow = null;
     baseCaseIndex = null;
-    elements.summaryLine.textContent = "Расчёт ещё не выполнялся.";
-    elements.caseMeta.textContent = "Базовый случай ещё не построен.";
+    elements.summaryLine.textContent = "No computation has been run yet.";
+    elements.caseMeta.textContent = "No base case selected.";
     renderWarningStack(elements.globalWarnings, []);
     renderWarningStack(elements.caseWarnings, []);
-    setEmptyState(elements.caseSummaryWrap, "Сводка геометрии появится после расчёта.", "case-summary-grid");
-    setEmptyState(elements.resultTableWrap, "Нет данных.", "table-wrap");
-    setEmptyState(elements.orderTableWrap, "Выберите строку таблицы, чтобы сравнить порядок-за-порядком.", "table-wrap");
-    setEmptyState(elements.chartWrap, "График потенциала появится сразу после расчёта базового случая.", "chart-wrap");
-    setEmptyState(elements.modeChartWrap, "График мод появится после расчёта: для скана по параметру или по клику на обертон.", "chart-wrap");
-    elements.selectionMeta.textContent = "Строка не выбрана.";
+    setEmptyState(elements.caseSummaryWrap, "Geometry summary will appear after computation.", "case-summary-grid");
+    setEmptyState(elements.resultTableWrap, "No data.", "table-wrap");
+    setEmptyState(elements.orderTableWrap, "Select a row to compare the WKB orders step by step.", "table-wrap");
+    setEmptyState(elements.chartWrap, "The potential plot will appear as soon as the base case is computed.", "chart-wrap");
+    setEmptyState(elements.modeChartWrap, "Mode curves will appear after computation for a parameter scan or after selecting one overtone.", "chart-wrap");
+    elements.selectionMeta.textContent = "No row selected.";
     elements.clearSelection.disabled = true;
   }
 
@@ -590,9 +625,9 @@
     const headers = [
       ...result.parameterNames.map((name) => `<th>${name}</th>`),
       "<th>n</th>",
-      `<th>Re ω (WKB ${result.mainOrder})</th>`,
-      `<th>Im ω (WKB ${result.mainOrder})</th>`,
-      "<th>Предупреждения</th>"
+      `<th>Re omega (WKB ${result.mainOrder})</th>`,
+      `<th>Im omega (WKB ${result.mainOrder})</th>`,
+      "<th>Warnings</th>"
     ];
     const body = flatRows
       .map(
@@ -623,7 +658,7 @@
 
   function buildOrderTable(resultRow) {
     if (!currentResult.showAllOrders) {
-      setEmptyState(elements.orderTableWrap, "Показ по порядкам отключён.", "table-wrap");
+      setEmptyState(elements.orderTableWrap, "Per-order output is disabled.", "table-wrap");
       return;
     }
     const wkbRows = resultRow.caseData.orders
@@ -657,10 +692,10 @@
       <table>
         <thead>
           <tr>
-            <th>Схема</th>
-            <th>Re ω</th>
-            <th>Im ω</th>
-            <th>Отн. отличие</th>
+            <th>Method</th>
+            <th>Re omega</th>
+            <th>Im omega</th>
+            <th>Relative drift</th>
           </tr>
         </thead>
         <tbody>${wkbRows}${padeRows}</tbody>
@@ -671,17 +706,17 @@
   function buildCaseSummary(caseData) {
     const paramText = currentResult.parameterNames.map((name) => `${name}=${compactNumber(caseData.params[name])}`).join(", ");
     if (currentResult.cases.length > 1) {
-      elements.caseMeta.textContent = `Базовый случай: ${paramText || "без дополнительных параметров"}`;
+      elements.caseMeta.textContent = `Base case: ${paramText || "no additional parameters"}`;
     } else {
-      elements.caseMeta.textContent = paramText || "Параметров кроме r нет.";
+      elements.caseMeta.textContent = paramText || "No parameters other than r.";
     }
     renderWarningStack(elements.caseWarnings, caseData.warnings);
     elements.caseSummaryWrap.className = "case-summary-grid";
     elements.caseSummaryWrap.innerHTML = `
-      <div class="summary-chip"><span>Горизонт</span><strong title="${caseData.horizon}">${compactNumber(caseData.horizon)}</strong></div>
-      <div class="summary-chip"><span>Пик потенциала</span><strong title="${caseData.peak}">${compactNumber(caseData.peak)}</strong></div>
-      <div class="summary-chip"><span>Спектральное окно Δ</span><strong title="${caseData.delta}">${compactNumber(caseData.delta)}</strong></div>
-      <div class="summary-chip"><span>Стабильность</span><strong title="${caseData.stability}">${compactNumber(caseData.stability)}</strong></div>
+      <div class="summary-chip"><span>Horizon</span><strong title="${caseData.horizon}">${compactNumber(caseData.horizon)}</strong></div>
+      <div class="summary-chip"><span>Potential peak</span><strong title="${caseData.peak}">${compactNumber(caseData.peak)}</strong></div>
+      <div class="summary-chip"><span>Spectral window Delta</span><strong title="${caseData.delta}">${compactNumber(caseData.delta)}</strong></div>
+      <div class="summary-chip"><span>Stability</span><strong title="${caseData.stability}">${compactNumber(caseData.stability)}</strong></div>
     `;
   }
 
@@ -697,13 +732,13 @@
       return;
     }
     if (caseData.detailFailed) {
-      setEmptyState(elements.chartWrap, "Не удалось построить график потенциала для базового случая.", "chart-wrap");
+      setEmptyState(elements.chartWrap, "Could not build the potential plot for the base case.", "chart-wrap");
       return;
     }
     elements.chartWrap.className = "chart-wrap empty-state";
     elements.chartWrap.textContent = currentResult.cases.length > 1
-      ? "Строится график потенциала для базового случая."
-      : "Строится график потенциала.";
+      ? "Building the potential plot for the base case."
+      : "Building the potential plot.";
     requestCaseDetail(caseIndex);
   }
 
@@ -719,12 +754,12 @@
 
   function renderModeScanChart() {
     if (!currentResult || currentResult.cases.length < 2) {
-      setEmptyState(elements.modeChartWrap, "График мод доступен при скане параметра.", "chart-wrap");
+      setEmptyState(elements.modeChartWrap, "Mode curves are available for parameter scans.", "chart-wrap");
       return;
     }
     const varying = varyingParameterNames(currentResult);
     if (varying.length !== 1) {
-      setEmptyState(elements.modeChartWrap, "График мод строится только при скане одного параметра.", "chart-wrap");
+      setEmptyState(elements.modeChartWrap, "Mode curves are shown only for a scan in one parameter.", "chart-wrap");
       return;
     }
     const parameterName = varying[0];
@@ -736,7 +771,7 @@
       .filter((item) => Number.isFinite(item.x))
       .sort((left, right) => left.x - right.x);
     if (rows.length < 2) {
-      setEmptyState(elements.modeChartWrap, "Недостаточно точек для графика мод.", "chart-wrap");
+      setEmptyState(elements.modeChartWrap, "Not enough points are available to draw the mode curves.", "chart-wrap");
       return;
     }
     const overtones = Array.from(new Set(rows[0].caseData.overtones.map((item) => item.n))).sort((left, right) => left - right);
@@ -748,7 +783,7 @@
       }))
       .filter((branch) => branch.re.every(Number.isFinite) && branch.im.every(Number.isFinite));
     if (!branches.length) {
-      setEmptyState(elements.modeChartWrap, "Не удалось собрать ветви мод для графика.", "chart-wrap");
+      setEmptyState(elements.modeChartWrap, "Could not assemble the overtone branches for the plot.", "chart-wrap");
       return;
     }
     App.Chart.renderModeScanChart(elements.modeChartWrap, {
@@ -760,14 +795,14 @@
 
   function renderOrderTrendChart(resultRow) {
     if (!resultRow) {
-      setEmptyState(elements.modeChartWrap, "Выберите строку таблицы, чтобы построить график по порядкам WKB.", "chart-wrap");
+      setEmptyState(elements.modeChartWrap, "Select a table row to plot the mode against WKB order.", "chart-wrap");
       return;
     }
     const orders = resultRow.caseData.orders.map((order) => Number(order));
     const re = resultRow.caseData.orders.map((order) => Number(resultRow.overtone.orders[order].re));
     const im = resultRow.caseData.orders.map((order) => Number(resultRow.overtone.orders[order].im));
     if (!orders.every(Number.isFinite) || !re.every(Number.isFinite) || !im.every(Number.isFinite)) {
-      setEmptyState(elements.modeChartWrap, "Не удалось построить график по порядкам WKB.", "chart-wrap");
+      setEmptyState(elements.modeChartWrap, "Could not build the plot over WKB orders.", "chart-wrap");
       return;
     }
     App.Chart.renderOrderTrendChart(elements.modeChartWrap, {
@@ -800,7 +835,7 @@
     caseData.detailPending = true;
     if (caseIndex === baseCaseIndex) {
       elements.chartWrap.className = "chart-wrap empty-state";
-      elements.chartWrap.textContent = "Догружается график потенциала для базового случая.";
+      elements.chartWrap.textContent = "Loading the potential plot for the base case.";
     }
     stopDetailWorker();
     try {
@@ -867,7 +902,7 @@
         );
         if (baseCaseIndex === caseIndex) {
           buildCaseSummary(currentResult.cases[caseIndex]);
-          setEmptyState(elements.chartWrap, "Не удалось построить график потенциала для базового случая.", "chart-wrap");
+          setEmptyState(elements.chartWrap, "Could not build the potential plot for the base case.", "chart-wrap");
         }
         if (selectedRow !== null) {
           selectRow(selectedRow, false);
@@ -891,13 +926,13 @@
     if (currentResult) {
       buildResultsTable(currentResult);
     }
-    elements.selectionMeta.textContent = "Строка не выбрана.";
+    elements.selectionMeta.textContent = "No row selected.";
     elements.clearSelection.disabled = true;
-    setEmptyState(elements.orderTableWrap, "Выберите строку таблицы, чтобы сравнить порядки WKB и Padé.", "table-wrap");
+    setEmptyState(elements.orderTableWrap, "Select a row to compare the WKB orders and Pade values.", "table-wrap");
     if (currentResult && currentResult.cases.length > 1) {
       renderModeScanChart();
     } else {
-      setEmptyState(elements.modeChartWrap, "Щёлкните по строке таблицы, чтобы построить график моды по порядку WKB.", "chart-wrap");
+      setEmptyState(elements.modeChartWrap, "Select a row to plot the chosen overtone against WKB order.", "chart-wrap");
     }
   }
 
@@ -913,7 +948,7 @@
       return;
     }
     elements.clearSelection.disabled = false;
-    elements.selectionMeta.textContent = `Выбрано: n=${row.overtone.n}, Re ω=${compactNumber(row.overtone.main.re)}, Im ω=${compactNumber(row.overtone.main.im)}`;
+    elements.selectionMeta.textContent = `Selected: n=${row.overtone.n}, Re omega=${compactNumber(row.overtone.main.re)}, Im omega=${compactNumber(row.overtone.main.im)}`;
     buildOrderTable(row);
     if (currentResult.cases.length < 2) {
       renderOrderTrendChart(row);
@@ -926,7 +961,7 @@
       Object.assign({}, caseData, { detailLoaded: Boolean(caseData.plot), detailPending: false, detailFailed: false })
     );
     rebuildFlatRows();
-    elements.summaryLine.textContent = `Рассчитано наборов параметров: ${result.cases.length}; строк в таблице: ${flatRows.length}.`;
+    elements.summaryLine.textContent = `Computed parameter sets: ${result.cases.length}; rows in the table: ${flatRows.length}.`;
     renderWarningStack(elements.globalWarnings, uniqueWarnings(result.cases.flatMap((item) => item.warnings)));
     buildResultsTable(result);
     renderBaseCase(0);
@@ -937,7 +972,7 @@
       selectRow(0, false);
       return;
     }
-    elements.selectionMeta.textContent = "Строка не выбрана.";
+    elements.selectionMeta.textContent = "No row selected.";
   }
 
   function runComputation() {
@@ -952,28 +987,28 @@
     stopWorker();
     stopDetailWorker();
     resetOutput();
-    setStatus("Запуск worker и подготовка расчёта");
+    setStatus("Starting the worker and preparing the computation");
     setProgress(0, 1);
     lastRunConfig = Object.assign({}, config);
     const storePlots = estimateCaseCount(config) === 1;
     try {
       worker = createAppWorker();
     } catch (error) {
-      setStatus("Ошибка запуска worker");
+      setStatus("Worker startup failed");
       showInputError(workerStartupErrorText());
       return;
     }
     let ready = false;
     const startupTimer = setTimeout(() => {
       if (worker && !ready) {
-        setStatus("Worker не запустился");
+        setStatus("Worker did not start");
         showInputError(workerStartupErrorText());
         stopWorker();
       }
     }, 3000);
     worker.addEventListener("error", () => {
       clearTimeout(startupTimer);
-      setStatus("Ошибка запуска worker");
+      setStatus("Worker startup failed");
       showInputError(workerStartupErrorText());
       stopWorker();
     });
@@ -982,17 +1017,17 @@
       if (message.type === "ready") {
         ready = true;
         clearTimeout(startupTimer);
-        setStatus("Worker запущен, идёт расчёт");
+        setStatus("Worker is running, computation in progress");
         return;
       }
       if (message.type === "progress") {
-        setStatus(`Обработано ${message.completed} из ${message.total}`);
+        setStatus(`Processed ${message.completed} of ${message.total}`);
         setProgress(message.completed, message.total);
         return;
       }
       if (message.type === "done") {
         clearTimeout(startupTimer);
-        setStatus("Расчёт завершён");
+        setStatus("Computation finished");
         setProgress(1, 1);
         renderResult(message.result);
         stopWorker();
@@ -1000,7 +1035,7 @@
       }
       if (message.type === "error") {
         clearTimeout(startupTimer);
-        setStatus("Расчёт завершился с ошибкой");
+        setStatus("Computation failed");
         showInputError(message.message);
         stopWorker();
       }
@@ -1024,6 +1059,10 @@
     elements.presetSelect.addEventListener("change", () => applyPreset(elements.presetSelect.value));
     elements.detectParameters.addEventListener("click", () => detectParameters(undefined, false));
     elements.runButton.addEventListener("click", runComputation);
+    elements.sameMetricToggle.addEventListener("change", () => {
+      syncSameMetricState();
+      scheduleMetricRefresh();
+    });
     elements.perturbationType.addEventListener("change", syncAngularConstraints);
     elements.ellInput.addEventListener("input", syncAngularConstraints);
     elements.overtoneInput.addEventListener("input", syncAngularConstraints);
@@ -1046,7 +1085,7 @@
     applyPreset("schwarzschild");
     elements.clearSelection.disabled = true;
     if (window.location.protocol === "file:") {
-      setStatus("Открыт локальный файл; worker запускается в совместимом режиме");
+      setStatus("Opened from a local file; the worker will use the compatibility bootstrap.");
     }
   });
 })();

@@ -143,14 +143,8 @@
 
   function chooseQnmBranch(z, ctx) {
     let root = z.sqrt(ctx);
-    if (root.im.isPositive()) {
-      root = root.neg();
-    }
     if (root.re.isNegative()) {
       root = root.neg();
-    }
-    if (root.im.isPositive()) {
-      root = new ComplexDecimal(root.re, root.im.neg());
     }
     return root;
   }
@@ -248,7 +242,7 @@
       return b;
     }
     if (fa.isPositive() === fb.isPositive()) {
-      throw new Error("Интервал не содержит смены знака.");
+      throw new Error("The interval does not contain a sign change.");
     }
     const tolerance = scaleEpsilon(ctx, b.minus(a));
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {

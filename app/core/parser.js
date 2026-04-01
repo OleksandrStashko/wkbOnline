@@ -75,12 +75,12 @@
           if (input[expEnd] === "+" || input[expEnd] === "-") {
             expEnd += 1;
           }
-          let expDigits = expEnd;
+          const expDigits = expEnd;
           while (isDigit(input[expEnd])) {
             expEnd += 1;
           }
           if (expEnd === expDigits) {
-            throw new Error("Некорректная экспоненциальная запись рядом с позицией " + end + ".");
+            throw new Error("Malformed exponential notation near position " + end + ".");
           }
           end = expEnd;
         }
@@ -97,7 +97,7 @@
         index = end;
         continue;
       }
-      throw new Error("Недопустимый символ \"" + ch + "\" в позиции " + index + ".");
+      throw new Error(`Illegal character "${ch}" at position ${index}.`);
     }
     tokens.push({ type: "eof", value: "", index: input.length });
     return tokens;
@@ -113,7 +113,7 @@
     function consume(type) {
       const token = tokens[position];
       if (type && token.type !== type) {
-        throw new Error("Ожидался токен " + type + " в позиции " + token.index + ".");
+        throw new Error(`Expected token ${type} at position ${token.index}.`);
       }
       position += 1;
       return token;
@@ -159,7 +159,7 @@
         consume("-");
         return { kind: "unary", op: "-", arg: parsePrimary() };
       }
-      throw new Error("Неожиданный токен в позиции " + token.index + ".");
+      throw new Error("Unexpected token at position " + token.index + ".");
     }
 
     function parsePower() {
@@ -191,7 +191,7 @@
 
     const ast = parseExpression();
     if (peek().type !== "eof") {
-      throw new Error("Лишний фрагмент выражения в позиции " + peek().index + ".");
+      throw new Error("Unexpected trailing expression fragment at position " + peek().index + ".");
     }
     return ast;
   }
@@ -226,16 +226,16 @@
           params.add(node.name);
         }
         if (node.kind === "call" && !FUNCTIONS.has(node.name)) {
-          throw new Error("Неизвестная функция \"" + node.name + "\".");
+          throw new Error(`Unknown function "${node.name}".`);
         }
       });
     }
-    return Array.from(params).sort((a, b) => a.localeCompare(b, "ru"));
+    return Array.from(params).sort((a, b) => a.localeCompare(b, "en"));
   }
 
   function ensureArgCount(name, args, counts) {
     if (!counts.includes(args.length)) {
-      throw new Error("Функция \"" + name + "\" получила " + args.length + " арг., ожидалось: " + counts.join(" или ") + ".");
+      throw new Error(`Function "${name}" received ${args.length} argument(s); expected ${counts.join(" or ")}.`);
     }
   }
 
@@ -251,7 +251,7 @@
           return D.exp(1);
         }
         if (!(ast.name in env)) {
-          throw new Error("Не задан параметр \"" + ast.name + "\".");
+          throw new Error(`Parameter "${ast.name}" is not defined.`);
         }
         return env[ast.name];
       }
@@ -277,7 +277,7 @@
         if (ast.op === "^") {
           return left.pow(right);
         }
-        throw new Error("Неизвестная операция \"" + ast.op + "\".");
+        throw new Error(`Unknown operator "${ast.op}".`);
       }
       case "call": {
         const args = ast.args.map((arg) => evaluateAst(arg, env, D));
@@ -362,10 +362,10 @@
           ensureArgCount(name, args, [2]);
           return D.max(args[0], args[1]);
         }
-        throw new Error("Неизвестная функция \"" + name + "\".");
+        throw new Error(`Unknown function "${name}".`);
       }
       default:
-        throw new Error("Неизвестный тип узла AST.");
+        throw new Error("Unknown AST node type.");
     }
   }
 
@@ -373,14 +373,14 @@
     return { v, d };
   }
 
-  function dualMul(left, right, D) {
+  function dualMul(left, right) {
     return makeDual(
       left.v.times(right.v),
       left.d.times(right.v).plus(left.v.times(right.d))
     );
   }
 
-  function dualDiv(left, right, D) {
+  function dualDiv(left, right) {
     const denom = right.v.times(right.v);
     return makeDual(
       left.v.div(right.v),
@@ -416,7 +416,7 @@
           return makeDual(D.exp(1), new D(0));
         }
         if (!(ast.name in env)) {
-          throw new Error("Не задан параметр \"" + ast.name + "\".");
+          throw new Error(`Parameter "${ast.name}" is not defined.`);
         }
         return env[ast.name];
       }
@@ -434,15 +434,15 @@
           return makeDual(left.v.minus(right.v), left.d.minus(right.d));
         }
         if (ast.op === "*") {
-          return dualMul(left, right, D);
+          return dualMul(left, right);
         }
         if (ast.op === "/") {
-          return dualDiv(left, right, D);
+          return dualDiv(left, right);
         }
         if (ast.op === "^") {
           return dualPow(left, right, D);
         }
-        throw new Error("Неизвестная операция \"" + ast.op + "\".");
+        throw new Error(`Unknown operator "${ast.op}".`);
       }
       case "call": {
         const args = ast.args.map((arg) => evaluateDualAst(arg, env, D));
@@ -451,7 +451,7 @@
         const two = new D(2);
         const name = ast.name;
         if (name === "abs" || name === "min" || name === "max") {
-          throw new Error("Функция \"" + name + "\" не поддерживается в аналитическом вычислении производной.");
+          throw new Error(`Function "${name}" is not supported in analytic derivative evaluation.`);
         }
         if (name === "sqrt") {
           ensureArgCount(name, args, [1]);
@@ -474,8 +474,7 @@
           }
           return dualDiv(
             makeDual(args[0].v.ln(), args[0].d.div(args[0].v)),
-            makeDual(args[1].v.ln(), args[1].d.div(args[1].v)),
-            D
+            makeDual(args[1].v.ln(), args[1].d.div(args[1].v))
           );
         }
         if (name === "sin") {
@@ -535,10 +534,10 @@
           ensureArgCount(name, args, [2]);
           return dualPow(args[0], args[1], D);
         }
-        throw new Error("Неизвестная функция \"" + name + "\".");
+        throw new Error(`Unknown function "${name}".`);
       }
       default:
-        throw new Error("Неизвестный тип узла AST.");
+        throw new Error("Unknown AST node type.");
     }
   }
 
@@ -559,7 +558,7 @@
     collectParameters,
     createEvaluator,
     createDualEvaluator,
-    functionNames: Array.from(FUNCTIONS).sort((a, b) => a.localeCompare(b, "ru")),
-    constantNames: Array.from(CONSTANTS).sort((a, b) => a.localeCompare(b, "ru"))
+    functionNames: Array.from(FUNCTIONS).sort((a, b) => a.localeCompare(b, "en")),
+    constantNames: Array.from(CONSTANTS).sort((a, b) => a.localeCompare(b, "en"))
   };
 })();

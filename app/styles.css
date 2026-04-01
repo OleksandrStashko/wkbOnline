@@ -1,17 +1,19 @@
 :root {
-  --paper: #f6f1e7;
-  --paper-strong: #fffaf0;
+  --paper: #f2ecdf;
+  --paper-strong: #fffdf7;
+  --surface: rgba(255, 253, 247, 0.82);
+  --surface-soft: rgba(255, 255, 255, 0.7);
   --ink: #1f2c2b;
-  --ink-soft: #55635f;
+  --ink-soft: #5b6763;
   --edge: rgba(31, 44, 43, 0.12);
-  --accent: #0e6670;
+  --accent: #0d676f;
   --accent-strong: #0a4a52;
-  --gold: #c08b2c;
+  --accent-soft: rgba(13, 103, 111, 0.08);
+  --gold: #c3912f;
   --warn: #8b2d1e;
   --warn-bg: #fae6dd;
-  --card: rgba(255, 250, 240, 0.82);
-  --shadow: 0 24px 80px rgba(22, 37, 40, 0.12);
-  --radius: 22px;
+  --shadow: 0 24px 80px rgba(18, 33, 37, 0.12);
+  --radius: 24px;
 }
 
 * {
@@ -22,11 +24,11 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at top right, rgba(192, 139, 44, 0.16), transparent 28%),
-    radial-gradient(circle at top left, rgba(14, 102, 112, 0.12), transparent 34%),
-    linear-gradient(180deg, #ece3d3 0%, #f6f1e7 44%, #efe8da 100%);
   color: var(--ink);
+  background:
+    radial-gradient(circle at top right, rgba(195, 145, 47, 0.16), transparent 28%),
+    radial-gradient(circle at top left, rgba(13, 103, 111, 0.12), transparent 32%),
+    linear-gradient(180deg, #ece3d2 0%, #f3ede1 44%, #eee7db 100%);
   font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
 }
 
@@ -41,46 +43,52 @@ button {
   font: inherit;
 }
 
+code,
+textarea,
+table code {
+  font-family: "Consolas", "Lucida Console", monospace;
+}
+
 .page-shell {
-  max-width: 1560px;
+  max-width: 1680px;
   margin: 0 auto;
 }
 
 .hero {
   display: grid;
-  grid-template-columns: 1.8fr 1fr;
-  gap: 24px;
-  margin-bottom: 24px;
-  padding: 28px 30px;
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.95fr);
+  gap: 28px;
+  padding: 32px 34px;
+  margin-bottom: 26px;
   border: 1px solid var(--edge);
-  border-radius: calc(var(--radius) + 6px);
+  border-radius: calc(var(--radius) + 8px);
   background:
-    linear-gradient(135deg, rgba(255, 250, 240, 0.94), rgba(246, 241, 231, 0.88)),
-    linear-gradient(90deg, rgba(14, 102, 112, 0.04), rgba(192, 139, 44, 0.08));
+    linear-gradient(135deg, rgba(255, 252, 244, 0.96), rgba(242, 236, 223, 0.9)),
+    linear-gradient(90deg, rgba(13, 103, 111, 0.05), rgba(195, 145, 47, 0.08));
   box-shadow: var(--shadow);
 }
 
-.eyebrow {
-  margin: 0 0 10px;
+.hero-kicker {
+  margin: 0 0 12px;
   color: var(--accent-strong);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
 }
 
 .hero h1 {
-  margin: 0 0 12px;
-  font-size: clamp(2rem, 3vw, 3.45rem);
-  line-height: 1.05;
+  margin: 0 0 14px;
+  font-size: clamp(2.1rem, 3vw, 3.6rem);
+  line-height: 1.03;
   font-weight: 600;
 }
 
 .hero-text {
-  max-width: 58ch;
   margin: 0;
+  max-width: 60ch;
   color: var(--ink-soft);
   font-size: 1.06rem;
-  line-height: 1.55;
+  line-height: 1.58;
 }
 
 .hero-math {
@@ -91,71 +99,81 @@ button {
 
 .formula {
   padding: 18px 20px;
-  border: 1px solid rgba(14, 102, 112, 0.18);
+  border: 1px solid rgba(13, 103, 111, 0.18);
   border-radius: 18px;
-  background: rgba(12, 41, 45, 0.94);
-  color: #f3f4ef;
-  font-family: "Consolas", "Lucida Console", monospace;
+  background: rgba(14, 31, 34, 0.94);
+  color: #f5f4ef;
   font-size: 1rem;
   overflow-x: auto;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(360px, 480px) minmax(0, 1fr);
-  gap: 22px;
+  grid-template-columns: minmax(480px, 620px) minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
 .panel,
-.card {
+.card,
+.section-card {
   border: 1px solid var(--edge);
   border-radius: var(--radius);
-  background: var(--card);
+  background: var(--surface);
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow);
 }
 
 .panel {
-  padding: 24px;
+  padding: 26px;
+}
+
+.control-panel {
+  display: grid;
+  gap: 20px;
 }
 
 .panel-head,
 .card-head,
-.subpanel-head {
+.section-head {
   display: flex;
   justify-content: space-between;
   align-items: start;
-  gap: 12px;
+  gap: 14px;
 }
 
-.subpanel-actions {
-  display: grid;
-  justify-items: end;
-  gap: 10px;
+.panel-head-tight {
+  align-items: center;
 }
 
 .panel-head h2,
 .card-head h3,
-.subpanel-head h3 {
+.section-head h3,
+.editor-card-head h4 {
   margin: 0;
 }
 
+.panel-intro,
 .summary-line,
 .status-line,
 .progress-text,
 .card-head p,
-.subpanel-head p,
+.section-head p,
+.editor-card-head p,
 #selection-meta,
 #case-meta {
+  margin: 0;
   color: var(--ink-soft);
   font-size: 0.95rem;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
+.panel-actions,
 .selection-head-tools {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  align-items: center;
   gap: 10px;
 }
 
@@ -163,12 +181,12 @@ button {
 .checkbox-field {
   display: grid;
   gap: 8px;
-  margin-bottom: 16px;
 }
 
-.field-label {
-  font-size: 0.92rem;
+.field-label,
+.preview-label {
   color: var(--ink-soft);
+  font-size: 0.9rem;
 }
 
 textarea,
@@ -176,32 +194,110 @@ input,
 select {
   width: 100%;
   border: 1px solid rgba(31, 44, 43, 0.14);
-  border-radius: 14px;
+  border-radius: 15px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.78);
   color: var(--ink);
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
-}
-
-textarea,
-.expression-code,
-.diagnostics-box code,
-table code {
-  font-family: "Consolas", "Lucida Console", monospace;
 }
 
 textarea:focus,
 input:focus,
 select:focus {
   outline: none;
-  border-color: rgba(14, 102, 112, 0.45);
-  box-shadow: 0 0 0 4px rgba(14, 102, 112, 0.1);
+  border-color: rgba(13, 103, 111, 0.45);
+  box-shadow: 0 0 0 4px rgba(13, 103, 111, 0.1);
+}
+
+.formula-input {
+  min-height: 168px;
+  resize: vertical;
+  font-size: 1rem;
+  line-height: 1.45;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 243, 235, 0.96));
+}
+
+.formula-input:disabled {
+  color: var(--ink-soft);
+  background: rgba(238, 239, 236, 0.95);
+}
+
+.toggle-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.toggle-inline input {
+  width: auto;
+  margin: 0;
+}
+
+.section-card {
+  padding: 22px;
+}
+
+.setup-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.editor-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid rgba(31, 44, 43, 0.08);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.editor-card.mirrored-editor {
+  opacity: 0.8;
+  background: rgba(236, 239, 236, 0.86);
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-hint {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.toolbar-btn {
+  border: 1px solid rgba(13, 103, 111, 0.16);
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .field-group {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .field-group.three-columns {
@@ -210,51 +306,41 @@ select:focus {
 
 .checkbox-field {
   grid-auto-flow: column;
-  justify-content: start;
   align-items: center;
+  justify-content: start;
   gap: 10px;
 }
 
 .checkbox-field input {
   width: auto;
+  margin: 0;
 }
 
-.subpanel {
-  margin-top: 18px;
-  padding: 18px;
-  border: 1px solid rgba(31, 44, 43, 0.1);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.46);
-}
-
-.formula-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.formula-preview-card {
-  display: grid;
-  gap: 8px;
+.checkbox-card {
+  align-self: end;
+  padding: 12px 14px;
+  border: 1px solid rgba(31, 44, 43, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .formula-preview-box {
-  min-height: 96px;
+  min-height: 108px;
   padding: 14px 16px;
-  border: 1px solid rgba(14, 102, 112, 0.12);
+  border: 1px solid rgba(13, 103, 111, 0.12);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.78);
   overflow-x: auto;
 }
 
 .formula-preview-box.invalid {
   border-color: rgba(139, 45, 30, 0.22);
-  color: var(--warn);
   background: rgba(250, 230, 221, 0.72);
+  color: var(--warn);
 }
 
 .math-view {
-  font-size: 1.2rem;
+  font-size: 1.16rem;
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -289,9 +375,9 @@ select:focus {
 }
 
 .math-power sup {
+  margin-left: 0.1em;
   font-size: 0.72em;
   line-height: 1;
-  margin-left: 0.1em;
 }
 
 .math-fn {
@@ -303,24 +389,6 @@ select:focus {
   line-height: 1.45;
 }
 
-.help-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.help-item {
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(31, 44, 43, 0.08);
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.help-item code {
-  display: block;
-  margin-bottom: 6px;
-}
-
 .parameter-list {
   display: grid;
   gap: 12px;
@@ -328,11 +396,11 @@ select:focus {
 
 .parameter-row {
   display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid rgba(14, 102, 112, 0.12);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.56);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(13, 103, 111, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .parameter-row-top {
@@ -366,44 +434,6 @@ select:focus {
   transition: transform 120ms ease, filter 120ms ease;
 }
 
-.compact-button {
-  padding: 8px 14px;
-}
-
-.help-dialog {
-  padding: 0;
-  border: none;
-  background: transparent;
-  max-width: min(920px, calc(100vw - 32px));
-  width: 100%;
-}
-
-.help-dialog::backdrop {
-  background: rgba(17, 26, 28, 0.48);
-  backdrop-filter: blur(6px);
-}
-
-.help-dialog-card {
-  padding: 22px;
-  border: 1px solid var(--edge);
-  border-radius: 24px;
-  background: var(--paper-strong);
-  box-shadow: var(--shadow);
-}
-
-.help-dialog-text {
-  margin: 0 0 16px;
-  color: var(--ink-soft);
-  line-height: 1.5;
-}
-
-.ghost-button:disabled {
-  cursor: default;
-  opacity: 0.5;
-  transform: none;
-  filter: none;
-}
-
 .primary-button {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: #f7f4ed;
@@ -415,15 +445,26 @@ select:focus {
   color: var(--ink);
 }
 
+.compact-button {
+  padding: 8px 14px;
+}
+
 .primary-button:hover,
 .ghost-button:hover,
-.table-row-button:hover {
+.table-row-button:hover,
+.toolbar-btn:hover {
   transform: translateY(-1px);
   filter: brightness(1.02);
 }
 
+.ghost-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  filter: none;
+}
+
 .actions {
-  margin-top: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -433,9 +474,8 @@ select:focus {
 .progress-wrap {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
   gap: 12px;
-  margin-top: 14px;
+  align-items: center;
 }
 
 .progress-track {
@@ -461,18 +501,16 @@ select:focus {
 }
 
 .warning-box {
-  margin-top: 16px;
   padding: 14px 16px;
 }
 
 .warning-stack {
   display: grid;
   gap: 10px;
-  margin-bottom: 18px;
 }
 
 .warning-stack.compact {
-  margin-bottom: 14px;
+  margin-top: 6px;
 }
 
 .warning-item {
@@ -486,40 +524,40 @@ select:focus {
 
 .result-grid {
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.95fr);
   gap: 18px;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .card {
-  padding: 20px;
+  padding: 22px;
 }
 
 .table-wrap {
   overflow: auto;
-  border-radius: 16px;
   border: 1px solid rgba(31, 44, 43, 0.1);
-  background: rgba(255, 255, 255, 0.55);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
 }
 
 .empty-state {
-  min-height: 120px;
+  min-height: 128px;
   display: grid;
   place-items: center;
-  color: var(--ink-soft);
   padding: 20px;
+  color: var(--ink-soft);
 }
 
 table {
   width: 100%;
-  border-collapse: collapse;
   min-width: 720px;
+  border-collapse: collapse;
 }
 
 th,
 td {
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(31, 44, 43, 0.09);
+  border-bottom: 1px solid rgba(31, 44, 43, 0.08);
   text-align: left;
   vertical-align: top;
 }
@@ -527,25 +565,24 @@ td {
 thead th {
   position: sticky;
   top: 0;
-  background: rgba(243, 239, 230, 0.96);
-  backdrop-filter: blur(6px);
   z-index: 1;
+  background: rgba(244, 239, 229, 0.96);
+  backdrop-filter: blur(6px);
 }
 
 tbody tr.selected-row {
-  background: rgba(14, 102, 112, 0.08);
+  background: rgba(13, 103, 111, 0.08);
 }
 
 .table-row-button {
   appearance: none;
-  background: transparent;
-  border: none;
-  color: inherit;
+  width: 100%;
   padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
   text-align: left;
-  width: 100%;
-  font: inherit;
 }
 
 .case-summary-grid {
@@ -559,7 +596,7 @@ tbody tr.selected-row {
   gap: 8px;
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(31, 44, 43, 0.1);
 }
 
@@ -573,7 +610,7 @@ tbody tr.selected-row {
 }
 
 .chart-card {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .chart-wrap {
@@ -582,9 +619,9 @@ tbody tr.selected-row {
 
 .chart-title {
   margin-bottom: 8px;
-  color: var(--ink);
   font-size: 1rem;
   font-weight: 700;
+  color: var(--ink);
 }
 
 .chart-wrap svg {
@@ -645,43 +682,95 @@ tbody tr.selected-row {
   border-radius: 999px;
 }
 
-@media (max-width: 1260px) {
-  .layout,
-  .result-grid,
-  .hero {
+.help-dialog {
+  width: min(940px, calc(100vw - 32px));
+  max-width: 940px;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.help-dialog::backdrop {
+  background: rgba(16, 25, 28, 0.5);
+  backdrop-filter: blur(6px);
+}
+
+.help-dialog-card {
+  padding: 24px;
+  border: 1px solid var(--edge);
+  border-radius: 24px;
+  background: var(--paper-strong);
+  box-shadow: var(--shadow);
+}
+
+.help-dialog-text {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.help-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 44, 43, 0.08);
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.help-item code {
+  display: block;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 1380px) {
+  .layout {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 980px) {
+  .hero,
+  .editor-grid,
+  .result-grid,
+  .field-group,
+  .field-group.three-columns,
+  .parameter-controls,
+  .parameter-controls.compact,
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-actions,
+  .selection-head-tools,
+  .actions {
+    justify-content: start;
+  }
+}
+
+@media (max-width: 760px) {
   body {
-    padding: 14px;
+    padding: 16px;
   }
 
   .panel,
   .card,
+  .section-card,
   .hero {
     padding: 18px;
-    border-radius: 18px;
+    border-radius: 20px;
   }
 
   .case-summary-grid {
     grid-template-columns: 1fr;
   }
 
-  .formula-preview-grid,
-  .help-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .field-group,
-  .parameter-controls,
-  .parameter-controls.compact {
-    grid-template-columns: 1fr;
-  }
-
-  .actions {
-    align-items: start;
-    flex-direction: column;
+  .toggle-inline {
+    width: 100%;
+    justify-content: center;
   }
 }

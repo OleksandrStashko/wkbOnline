@@ -1,163 +1,191 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>QNM WKB Lab</title>
-    <link rel="stylesheet" href="app/styles.css?v=20260331e">
+    <title>QNM WKB Studio</title>
+    <link rel="stylesheet" href="app/styles.css?v=20260331i">
     <script src="app/core/namespace.js"></script>
     <script src="app/core/parser.js"></script>
-    <script src="app/ui/chart.js?v=20260331e" defer></script>
-    <script src="app/ui/app.js?v=20260331e" defer></script>
+    <script src="app/ui/chart.js?v=20260331i" defer></script>
+    <script src="app/ui/app.js?v=20260331i" defer></script>
   </head>
   <body>
     <div class="page-shell">
       <header class="hero">
         <div class="hero-copy">
-          <h1>Квазинормальные моды сферически-симметричных метрик</h1>
+          <p class="hero-kicker">Browser-side Scientific Computing</p>
+          <h1>Quasinormal Modes for Spherically Symmetric Spacetimes</h1>
           <p class="hero-text">
-            Приложение автоматически строит эффективный потенциал, ищет внешний горизонт и барьерный максимум,
-            а затем вычисляет QNM методом WKB до 13-го порядка.
+            Define the metric functions, build the effective potential automatically, locate the barrier peak,
+            and compute QNMs with high-order WKB entirely in the browser.
           </p>
         </div>
         <div class="hero-math">
-          <div class="formula">ds² = -f(r) dt² + dr² / g(r) + r² dΩ²</div>
-          <div class="formula">D* = √(f g) d/dr</div>
+          <div class="formula">ds^2 = -f(r) dt^2 + dr^2 / g(r) + r^2 dOmega^2</div>
+          <div class="formula">D_* = sqrt(f g) d/dr</div>
         </div>
       </header>
 
       <main class="layout">
         <section class="panel control-panel">
-          <div class="panel-head">
-            <h2>Постановка задачи</h2>
-            <button id="detect-parameters" class="ghost-button" type="button">Обновить параметры</button>
+          <div class="panel-head panel-head-tight">
+            <div>
+              <h2>Setup</h2>
+              <p class="panel-intro">Define the metric, physical sector, and numerical controls.</p>
+            </div>
+            <div class="panel-actions">
+              <button id="detect-parameters" class="ghost-button" type="button">Refresh Parameters</button>
+              <button id="open-help" class="ghost-button" type="button">Function Help</button>
+            </div>
           </div>
 
-          <label class="field">
-            <span class="field-label">Пресет</span>
-            <select id="preset-select"></select>
-          </label>
-
-          <label class="field">
-            <span class="field-label">f(r)</span>
-            <textarea id="f-expression" rows="3" spellcheck="false"></textarea>
-          </label>
-
-          <label class="field">
-            <span class="field-label">g(r)</span>
-            <textarea id="g-expression" rows="3" spellcheck="false"></textarea>
-          </label>
-
-          <div class="subpanel">
-            <div class="subpanel-head">
-              <h3>Предпросмотр формул</h3>
-              <div class="subpanel-actions">
-                <p>Обновляется автоматически при вводе.</p>
-                <button id="open-help" class="ghost-button compact-button" type="button">Справка</button>
+          <section class="section-card editor-section">
+            <div class="section-head">
+              <div>
+                <h3>Metric Editor</h3>
+                <p>Use analytic expressions in <code>r</code>. Horizons are searched from <code>f(r) = 0</code>.</p>
               </div>
+              <label class="toggle-inline">
+                <input id="same-metric-toggle" type="checkbox">
+                <span>Use <code>f(r)</code> for <code>g(r)</code></span>
+              </label>
             </div>
-            <div class="formula-preview-grid">
-              <div class="formula-preview-card">
-                <div class="field-label">f(r)</div>
+
+            <label class="field">
+              <span class="field-label">Preset</span>
+              <select id="preset-select"></select>
+            </label>
+
+            <div class="editor-grid">
+              <div class="editor-card">
+                <div class="editor-card-head">
+                  <h4>f(r)</h4>
+                  <p>Time component and horizon function.</p>
+                </div>
+                <textarea id="f-expression" class="formula-input" rows="5" spellcheck="false"></textarea>
+                <div class="preview-label">Preview</div>
                 <div id="f-preview" class="formula-preview-box"></div>
               </div>
-              <div class="formula-preview-card">
-                <div class="field-label">g(r)</div>
+
+              <div class="editor-card" id="g-editor-card">
+                <div class="editor-card-head">
+                  <h4>g(r)</h4>
+                  <p>Radial component. Locked automatically in <code>f = g</code> mode.</p>
+                </div>
+                <textarea id="g-expression" class="formula-input" rows="5" spellcheck="false"></textarea>
+                <div class="preview-label">Preview</div>
                 <div id="g-preview" class="formula-preview-box"></div>
               </div>
             </div>
+          </section>
+
+          <div class="setup-grid">
+            <section class="section-card">
+              <div class="section-head">
+                <div>
+                  <h3>Physics</h3>
+                  <p>Select the perturbation sector and the WKB outputs to display.</p>
+                </div>
+              </div>
+
+              <div class="field-group">
+                <label class="field">
+                  <span class="field-label">Perturbation</span>
+                  <select id="perturbation-type">
+                    <option value="scalar">Scalar field</option>
+                    <option value="electromagnetic">Electromagnetic field</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span class="field-label">ell</span>
+                  <input id="ell-input" type="number" min="0" step="1" value="2">
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Max overtone N</span>
+                  <input id="overtone-input" type="number" min="0" step="1" value="2">
+                </label>
+              </div>
+
+              <div class="field-group">
+                <label class="field">
+                  <span class="field-label">Main WKB order</span>
+                  <input id="order-input" type="number" min="1" max="13" step="1" value="6">
+                </label>
+
+                <label class="field checkbox-field checkbox-card">
+                  <input id="show-all-orders" type="checkbox" checked>
+                  <span>Show all orders up to the selected one</span>
+                </label>
+              </div>
+            </section>
+
+            <section class="section-card">
+              <div class="section-head">
+                <div>
+                  <h3>Numerics</h3>
+                  <p>Precision, collocation resolution, and search windows.</p>
+                </div>
+              </div>
+
+              <div class="field-group three-columns">
+                <label class="field">
+                  <span class="field-label">Decimal precision</span>
+                  <input id="precision-input" type="number" min="40" step="1" value="70">
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Chebyshev nodes</span>
+                  <input id="spectral-nodes-input" type="number" min="32" max="160" step="2" value="64">
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Plot samples</span>
+                  <input id="plot-samples-input" type="number" min="101" max="1201" step="20" value="401">
+                </label>
+              </div>
+
+              <div class="field-group three-columns">
+                <label class="field">
+                  <span class="field-label">Search r_min</span>
+                  <input id="r-min-input" type="text" value="0.8">
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Search r_max</span>
+                  <input id="r-max-input" type="text" value="30">
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Horizon scan points</span>
+                  <input id="horizon-samples-input" type="number" min="160" step="40" value="480">
+                </label>
+              </div>
+
+              <div class="field-group">
+                <label class="field">
+                  <span class="field-label">Peak scan points</span>
+                  <input id="peak-samples-input" type="number" min="400" step="100" value="900">
+                </label>
+              </div>
+            </section>
           </div>
 
-          <div class="field-group">
-            <label class="field">
-              <span class="field-label">Тип возмущения</span>
-              <select id="perturbation-type">
-                <option value="scalar">Скалярное поле</option>
-                <option value="electromagnetic">Электромагнитное поле</option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span class="field-label">ℓ</span>
-              <input id="ell-input" type="number" min="0" step="1" value="2">
-            </label>
-
-            <label class="field">
-              <span class="field-label">Макс. обертон N</span>
-              <input id="overtone-input" type="number" min="0" step="1" value="2">
-            </label>
-          </div>
-
-          <div class="field-group">
-            <label class="field">
-              <span class="field-label">Основной порядок WKB</span>
-              <input id="order-input" type="number" min="1" max="13" step="1" value="6">
-            </label>
-
-            <label class="field checkbox-field">
-              <input id="show-all-orders" type="checkbox" checked>
-              <span>Показывать все порядки до выбранного</span>
-            </label>
-          </div>
-
-          <div class="subpanel">
-            <div class="subpanel-head">
-              <h3>Параметры метрики</h3>
-              <p>Параметры определяются автоматически из f(r) и g(r), кроме r.</p>
+          <section class="section-card">
+            <div class="section-head">
+              <div>
+                <h3>Detected Parameters</h3>
+                <p>Every analytic symbol except <code>r</code> is treated as a parameter.</p>
+              </div>
             </div>
             <div id="parameter-list" class="parameter-list"></div>
-          </div>
-
-          <div class="subpanel">
-            <div class="subpanel-head">
-              <h3>Численные настройки</h3>
-            </div>
-
-            <div class="field-group three-columns">
-              <label class="field">
-                <span class="field-label">Точность Decimal</span>
-                <input id="precision-input" type="number" min="40" step="1" value="70">
-              </label>
-
-              <label class="field">
-                <span class="field-label">Узлы Чебышёва</span>
-                <input id="spectral-nodes-input" type="number" min="32" max="160" step="2" value="64">
-              </label>
-
-              <label class="field">
-                <span class="field-label">Точек графика</span>
-                <input id="plot-samples-input" type="number" min="101" max="1201" step="20" value="401">
-              </label>
-            </div>
-
-            <div class="field-group three-columns">
-              <label class="field">
-                <span class="field-label">r_min поиска</span>
-                <input id="r-min-input" type="text" value="0.8">
-              </label>
-
-              <label class="field">
-                <span class="field-label">r_max поиска</span>
-                <input id="r-max-input" type="text" value="30">
-              </label>
-
-              <label class="field">
-                <span class="field-label">Сетка горизонта</span>
-                <input id="horizon-samples-input" type="number" min="160" step="40" value="480">
-              </label>
-            </div>
-
-            <div class="field-group">
-              <label class="field">
-                <span class="field-label">Сетка максимума</span>
-                <input id="peak-samples-input" type="number" min="400" step="100" value="900">
-              </label>
-            </div>
-          </div>
+          </section>
 
           <div class="actions">
-            <button id="run-button" class="primary-button" type="button">Вычислить QNM</button>
-            <div id="status-line" class="status-line">Ожидание запуска</div>
+            <button id="run-button" class="primary-button" type="button">Compute QNMs</button>
+            <div id="status-line" class="status-line">Idle</div>
           </div>
 
           <div class="progress-wrap">
@@ -171,68 +199,70 @@
         </section>
 
         <section class="panel output-panel">
-          <div class="panel-head">
-            <h2>Результаты</h2>
-            <div id="summary-line" class="summary-line">Расчёт ещё не выполнялся.</div>
+          <div class="panel-head panel-head-tight">
+            <div>
+              <h2>Results</h2>
+              <div id="summary-line" class="summary-line">No computation has been run yet.</div>
+            </div>
           </div>
 
           <div id="global-warnings" class="warning-stack"></div>
 
           <div class="card">
             <div class="card-head">
-              <h3>Геометрия и барьер</h3>
-              <p id="case-meta">Случай не выбран.</p>
+              <h3>Geometry and Barrier</h3>
+              <p id="case-meta">No base case selected.</p>
             </div>
             <div id="case-warnings" class="warning-stack compact"></div>
-            <div id="case-summary-wrap" class="case-summary-grid empty-state">Сводка геометрии появится после расчёта.</div>
+            <div id="case-summary-wrap" class="case-summary-grid empty-state">Geometry summary will appear after computation.</div>
           </div>
 
           <div class="result-grid">
             <div class="card">
               <div class="card-head">
-                <h3>Таблица частот</h3>
-                <p>Щёлкните по строке, чтобы выбрать обертон и графики.</p>
+                <h3>Mode Table</h3>
+                <p>Click a row to inspect one overtone.</p>
               </div>
-              <div id="result-table-wrap" class="table-wrap empty-state">Нет данных.</div>
+              <div id="result-table-wrap" class="table-wrap empty-state">No data.</div>
             </div>
 
             <div class="card">
               <div class="card-head">
-                <h3>Выбранная мода</h3>
+                <h3>Selected Mode</h3>
                 <div class="selection-head-tools">
-                  <p id="selection-meta">Строка не выбрана.</p>
-                  <button id="clear-selection" class="ghost-button compact-button" type="button">Закрыть</button>
+                  <p id="selection-meta">No row selected.</p>
+                  <button id="clear-selection" class="ghost-button compact-button" type="button">Clear</button>
                 </div>
               </div>
-              <div id="order-table-wrap" class="table-wrap empty-state">Щёлкните по строке таблицы, чтобы сравнить порядки.</div>
+              <div id="order-table-wrap" class="table-wrap empty-state">Select a row to compare WKB orders and Pade values.</div>
             </div>
           </div>
 
           <div class="card chart-card">
             <div class="card-head">
-              <h3>График мод</h3>
-              <p>Для одного случая показывает зависимость от порядка WKB, для скана одного параметра показывает все ветви n = 0, ..., N.</p>
+              <h3>Mode Curves</h3>
+              <p>For a single case this shows order dependence. For a one-parameter scan it shows all overtone branches.</p>
             </div>
-            <div id="mode-chart-wrap" class="chart-wrap empty-state">График мод появится при скане одного параметра.</div>
+            <div id="mode-chart-wrap" class="chart-wrap empty-state">Mode plots will appear after computation.</div>
           </div>
 
           <div class="card chart-card">
             <div class="card-head">
-              <h3>Потенциал V(r)</h3>
-              <p>Показывается на интервале от внешнего горизонта до r_hor + 10 или до r_max, если он меньше.</p>
+              <h3>Potential V(r)</h3>
             </div>
-            <div id="chart-wrap" class="chart-wrap empty-state">График потенциала станет доступен после выбора случая.</div>
+            <div id="chart-wrap" class="chart-wrap empty-state">Potential plot will appear after computation.</div>
           </div>
         </section>
       </main>
     </div>
+
     <dialog id="formula-help-dialog" class="help-dialog">
       <div class="help-dialog-card">
         <div class="card-head">
-          <h3>Справка по формулам</h3>
-          <button id="close-help" class="ghost-button compact-button" type="button">Закрыть</button>
+          <h3>Formula Help</h3>
+          <button id="close-help" class="ghost-button compact-button" type="button">Close</button>
         </div>
-        <p class="help-dialog-text">Поддерживаются стандартные аналитические записи для f(r) и g(r).</p>
+        <p class="help-dialog-text">Supported analytic functions and constants for the metric editor.</p>
         <div id="formula-help" class="help-grid"></div>
       </div>
     </dialog>

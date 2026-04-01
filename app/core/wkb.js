@@ -47,7 +47,7 @@
   function barrierScale(variables, ctx) {
     const v2 = variables[1];
     if (!v2.isNegative()) {
-      throw new Error("Для WKB требуется V''(r*_0) < 0.");
+      throw new Error("WKB requires V''(r*_0) < 0.");
     }
     return variables[0].times(v2.times(-2).sqrt());
   }
@@ -203,7 +203,7 @@
   function computeSeries(n, derivatives, maxOrder, ctx) {
     const data = prepareData(ctx);
     if (maxOrder > data.maxOrder) {
-      throw new Error("Запрошенный порядок WKB превышает доступный предел.");
+      throw new Error("The requested WKB order exceeds the available limit.");
     }
     const variables = buildVariables(n, derivatives, ctx);
     const cumulative = [];

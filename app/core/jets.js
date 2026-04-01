@@ -97,7 +97,7 @@
   function reciprocal(a, ctx) {
     const order = a.length - 1;
     if (a[0].isZero()) {
-      throw new Error("Невозможно построить обратный ряд при нулевом свободном члене.");
+      throw new Error("Cannot build a reciprocal series when the constant term is zero.");
     }
     const result = zeroJet(order, ctx);
     result[0] = ctx.one.div(a[0]);
@@ -131,7 +131,7 @@
 
   function logJet(a, ctx) {
     if (a[0].isZero()) {
-      throw new Error("Логарифм не определён для ряда с нулевым свободным членом.");
+      throw new Error("The logarithm is undefined for a series with zero constant term.");
     }
     const quotient = div(derivative(a, ctx), a, ctx);
     return integral(quotient, a[0].ln(), ctx);
@@ -140,12 +140,12 @@
   function sqrtJet(a, ctx) {
     const order = a.length - 1;
     if (a[0].isNegative()) {
-      throw new Error("Квадратный корень требует неотрицательного свободного члена.");
+      throw new Error("The square root requires a non-negative constant term.");
     }
     const result = zeroJet(order, ctx);
     result[0] = a[0].sqrt();
     if (result[0].isZero() && order > 0) {
-      throw new Error("Квадратный корень вырожден и не допускает устойчивого ряда в этой точке.");
+      throw new Error("The square root is degenerate and does not admit a stable series at this point.");
     }
     for (let n = 1; n <= order; n += 1) {
       let sum = ctx.zero;
@@ -287,7 +287,7 @@
           return constantJet(ctx.D.exp(1), order, ctx);
         }
         if (!(ast.name in env)) {
-          throw new Error("Не задан параметр \"" + ast.name + "\".");
+          throw new Error("Parameter \"" + ast.name + "\" is not defined.");
         }
         return cloneJet(env[ast.name]);
       case "unary": {
@@ -312,7 +312,7 @@
         if (ast.op === "^") {
           return powJet(left, right, ctx);
         }
-        throw new Error("Неизвестная операция \"" + ast.op + "\".");
+        throw new Error("Unknown operator \"" + ast.op + "\".");
       }
       case "call": {
         const args = ast.args.map((arg) => evaluateAstJet(arg, env, ctx, order));
@@ -374,12 +374,12 @@
           return powJet(args[0], args[1], ctx);
         }
         if (name === "abs" || name === "min" || name === "max") {
-          throw new Error("Функция \"" + name + "\" не допускает аналитические производные нужного порядка.");
+          throw new Error("Function \"" + name + "\" does not support analytic derivatives of the required order.");
         }
-        throw new Error("Неизвестная функция \"" + name + "\".");
+        throw new Error("Unknown function \"" + name + "\".");
       }
       default:
-        throw new Error("Неизвестный тип AST.");
+        throw new Error("Unknown AST node type.");
     }
   }
 

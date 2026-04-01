@@ -71,7 +71,7 @@
     const yExtent = extent(config.series.flatMap((item) => item.values));
     if (!xExtent || !yExtent) {
       container.className = "chart-wrap empty-state";
-      container.textContent = config.emptyText || "Недостаточно данных для графика.";
+      container.textContent = config.emptyText || "Not enough data are available for the plot.";
       return;
     }
     const yPadding = (yExtent.max - yExtent.min || 1) * 0.08;
@@ -137,14 +137,14 @@
   function renderPotentialChart(container, plotData) {
     if (!plotData) {
       container.className = "chart-wrap empty-state";
-      container.textContent = "Для выбранного случая график потенциала недоступен.";
+      container.textContent = "The potential plot is not available for the selected case.";
       return;
     }
     const x = plotData.x.map((value) => Number(value));
     const y = plotData.potential.map((value) => Number(value));
     if (!x.every(Number.isFinite) || !y.every(Number.isFinite)) {
       container.className = "chart-wrap empty-state";
-      container.textContent = "Не удалось построить график потенциала из-за некорректных чисел.";
+      container.textContent = "Could not build the potential plot because the data contain invalid numbers.";
       return;
     }
     renderLineChart(container, {
@@ -152,14 +152,14 @@
       series: [{ label: "V(r)", values: y, color: "#0e6670" }],
       xLabel: plotData.xLabel || "r",
       yLabel: plotData.yLabel || "V(r)",
-      ariaLabel: "График эффективного потенциала"
+      ariaLabel: "Effective potential plot"
     });
   }
 
   function renderModeScanChart(container, data) {
     if (!data || !data.x || data.x.length < 2 || !data.branches || !data.branches.length) {
       container.className = "chart-wrap empty-state";
-      container.textContent = "График мод недоступен.";
+      container.textContent = "The mode plot is not available.";
       return;
     }
     container.className = "chart-stack";
@@ -169,7 +169,7 @@
     `;
     const panels = container.querySelectorAll(".chart-stack-panel");
     renderLineChart(panels[0], {
-      title: "Re ω для всех обертонов",
+      title: "Re omega for all overtones",
       x: data.x,
       series: data.branches.map((branch, index) => ({
         label: `n=${branch.n}`,
@@ -177,11 +177,11 @@
         color: palette(index)
       })),
       xLabel: data.parameterName,
-      yLabel: "Re ω",
-      ariaLabel: "График действительной части мод по параметру"
+      yLabel: "Re omega",
+      ariaLabel: "Real part of the quasinormal modes versus the scanned parameter"
     });
     renderLineChart(panels[1], {
-      title: "Im ω для всех обертонов",
+      title: "Im omega for all overtones",
       x: data.x,
       series: data.branches.map((branch, index) => ({
         label: `n=${branch.n}`,
@@ -189,27 +189,27 @@
         color: palette(index)
       })),
       xLabel: data.parameterName,
-      yLabel: "Im ω",
-      ariaLabel: "График мнимой части мод по параметру"
+      yLabel: "Im omega",
+      ariaLabel: "Imaginary part of the quasinormal modes versus the scanned parameter"
     });
   }
 
   function renderOrderTrendChart(container, data) {
     if (!data || !data.orders || data.orders.length < 1) {
       container.className = "chart-wrap empty-state";
-      container.textContent = "График по порядкам недоступен.";
+      container.textContent = "The WKB-order plot is not available.";
       return;
     }
     renderLineChart(container, {
-      title: `Зависимость моды от порядка WKB для n=${data.overtone}`,
+      title: `Mode versus WKB order for n=${data.overtone}`,
       x: data.orders,
       series: [
-        { label: "Re ω", values: data.re, color: "#0e6670" },
-        { label: "Im ω", values: data.im, color: "#c08b2c" }
+        { label: "Re omega", values: data.re, color: "#0e6670" },
+        { label: "Im omega", values: data.im, color: "#c08b2c" }
       ],
-      xLabel: "Порядок WKB",
-      yLabel: "ω",
-      ariaLabel: "График моды по порядкам метода"
+      xLabel: "WKB order",
+      yLabel: "omega",
+      ariaLabel: "Quasinormal mode versus WKB order"
     });
   }
 

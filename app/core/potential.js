@@ -41,7 +41,7 @@
     function s(r) {
       const product = f(r).times(g(r));
       if (!product.isPositive()) {
-        throw new Error("Вне горизонта требуется положительное произведение f(r) g(r).");
+        throw new Error("Outside the horizon the product f(r) g(r) must remain positive.");
       }
       return product.sqrt();
     }
@@ -74,12 +74,12 @@
     const angular = l.times(l.plus(ctx.one));
 
     function valueAt(r) {
+      const fr = metric.f(r);
       if (perturbationType === "electromagnetic") {
-        return metric.f(r).times(angular).div(r.times(r));
+        return fr.times(angular).div(r.times(r));
       }
       const fDual = metric.fDual(r);
       const gDual = metric.gDual(r);
-      const fr = fDual.v;
       const angularPart = fr.times(angular).div(r.times(r));
       const fgPrime = fDual.d.times(gDual.v).plus(fr.times(gDual.d));
       const scalarPart = fgPrime.div(ctx.two.times(r));
