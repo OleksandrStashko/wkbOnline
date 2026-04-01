@@ -21,13 +21,14 @@
 
   function normalizeConfig(rawConfig) {
     const ell = Math.max(0, Math.floor(Number(rawConfig.ell)));
+    const maxOrder = Math.max(1, Math.floor(Number((App.WKBData && App.WKBData.maxOrder) || 13)));
     return {
       fExpression: rawConfig.fExpression,
       gExpression: rawConfig.gExpression,
       perturbationType: rawConfig.perturbationType,
       ell,
       overtoneMax: Math.max(0, Math.floor(Number(rawConfig.overtoneMax))),
-      mainOrder: Math.max(1, Math.min(13, Number(rawConfig.mainOrder))),
+      mainOrder: Math.max(1, Math.min(maxOrder, Math.floor(Number(rawConfig.mainOrder)))),
       showAllOrders: Boolean(rawConfig.showAllOrders),
       precision: Math.max(40, Number(rawConfig.precision)),
       rMin: rawConfig.rMin,
@@ -330,13 +331,14 @@
     if (!star[2].isNegative()) {
       throw new Error("At the candidate peak, V''(r*) >= 0 was obtained, so the barrier maximum is invalid.");
     }
+    const seriesEvaluator = App.WKB.createSeriesEvaluator(star, config.mainOrder, ctx);
     const rows = [];
     const orderList = [];
     for (let order = 1; order <= config.mainOrder; order += 1) {
       orderList.push(order);
     }
     for (let n = 0; n <= config.overtoneMax; n += 1) {
-      const series = App.WKB.computeSeries(n, star, config.mainOrder, ctx);
+      const series = seriesEvaluator(n);
       assessWkbSeries(series, config.mainOrder, ctx, warnings);
       const orders = {};
       const orderAccuracy = {};

@@ -98,7 +98,7 @@
   let lastRunConfig = null;
   let baseCaseIndex = null;
   let metricRefreshTimer = null;
-  const workerVersion = "20260331k";
+  const workerVersion = "20260401e";
 
   function $(id) {
     return document.getElementById(id);
@@ -162,6 +162,48 @@
       return value.toExponential(5);
     }
     return value.toFixed(8).replace(/\.?0+$/, "");
+  }
+
+  function absNumberText(text) {
+    const value = Number(text);
+    if (!Number.isFinite(value)) {
+      return String(text).startsWith("-") ? String(text).slice(1) : String(text);
+    }
+    return compactNumber(Math.abs(value));
+  }
+
+  function formatComplexInline(value, compact) {
+    if (!value) {
+      return "--";
+    }
+    const reText = compact ? compactNumber(value.re) : value.re;
+    const imValue = Number(value.im);
+    const sign = Number.isFinite(imValue)
+      ? (imValue < 0 ? "-" : "+")
+      : (String(value.im).trim().startsWith("-") ? "-" : "+");
+    const imText = compact ? absNumberText(value.im) : String(value.im).replace(/^\s*-/, "");
+    return `${reText} ${sign} ${imText} i`;
+  }
+
+  function pickDisplayPade(items) {
+    if (!items || !items.length) {
+      return null;
+    }
+    return items.slice().sort((left, right) => {
+      const leftDrift = Number(left.relativeToMain);
+      const rightDrift = Number(right.relativeToMain);
+      const leftGap = Math.abs(left.numeratorDegree - left.denominatorDegree);
+      const rightGap = Math.abs(right.numeratorDegree - right.denominatorDegree);
+      const leftDegree = left.numeratorDegree + left.denominatorDegree;
+      const rightDegree = right.numeratorDegree + right.denominatorDegree;
+      if (Number.isFinite(leftDrift) && Number.isFinite(rightDrift) && leftDrift !== rightDrift) {
+        return leftDrift - rightDrift;
+      }
+      if (leftGap !== rightGap) {
+        return leftGap - rightGap;
+      }
+      return rightDegree - leftDegree;
+    })[0];
   }
 
   function formatRelative(text) {
@@ -678,9 +720,8 @@
     const headers = [
       ...result.parameterNames.map((name) => `<th>${name}</th>`),
       "<th>n</th>",
-      `<th>Re omega (WKB ${result.mainOrder})</th>`,
-      `<th>Im omega (WKB ${result.mainOrder})</th>`,
-      "<th>Warnings</th>"
+      `<th>omega (WKB ${result.mainOrder})</th>`,
+      "<th>Pade</th>"
     ];
     const body = flatRows
       .map((row, index) => {
@@ -691,13 +732,17 @@
         if (index > 0 && flatRows[index - 1].caseIndex !== row.caseIndex) {
           classes.push("group-divider");
         }
+        const modeText = formatComplexInline(row.overtone.main, true);
+        const modeTitle = formatComplexInline(row.overtone.main, false);
+        const pade = pickDisplayPade(row.overtone.pade);
+        const padeText = pade ? formatComplexInline(pade.value, true) : "--";
+        const padeTitle = pade ? `${pade.label}: ${formatComplexInline(pade.value, false)}` : "No Pade value";
         return `
           <tr class="${classes.join(" ")}">
             ${result.parameterNames.map((name) => `<td>${compactNumber(row.caseData.params[name])}</td>`).join("")}
             <td><button class="table-row-button" type="button" data-row-index="${index}">${row.overtone.n}</button></td>
-            <td><button class="table-row-button" type="button" data-row-index="${index}" title="${row.overtone.main.re}">${compactNumber(row.overtone.main.re)}</button></td>
-            <td><button class="table-row-button" type="button" data-row-index="${index}" title="${row.overtone.main.im}">${compactNumber(row.overtone.main.im)}</button></td>
-            <td>${row.caseData.warnings.length}</td>
+            <td><button class="table-row-button" type="button" data-row-index="${index}" title="${escapeHtml(modeTitle)}">${escapeHtml(modeText)}</button></td>
+            <td title="${escapeHtml(padeTitle)}">${escapeHtml(padeText)}</td>
           </tr>
         `;
       })

@@ -1,17 +1,19 @@
 const workerBase = self.QNMAppWorkerBase || new URL("./", self.location.href).href;
+const workerAssetVersion = "20260401d";
+const asset = (path) => new URL(`${path}?v=${workerAssetVersion}`, workerBase).href;
 
 self.importScripts(
-  new URL("../core/namespace.js", workerBase).href,
-  new URL("../vendor/decimal.js", workerBase).href,
-  new URL("../core/parser.js", workerBase).href,
-  new URL("../core/jets.js", workerBase).href,
-  new URL("../core/numerics.js", workerBase).href,
-  new URL("../core/chebyshev.js", workerBase).href,
-  new URL("../core/potential.js", workerBase).href,
-  new URL("../core/operator.js", workerBase).href,
-  new URL("../data/wkb-data.js", workerBase).href,
-  new URL("../core/wkb.js", workerBase).href,
-  new URL("../core/solver.js", workerBase).href
+  asset("../core/namespace.js"),
+  asset("../vendor/decimal.js"),
+  asset("../core/parser.js"),
+  asset("../core/jets.js"),
+  asset("../core/numerics.js"),
+  asset("../core/chebyshev.js"),
+  asset("../core/potential.js"),
+  asset("../core/operator.js"),
+  asset("../data/wkb-data.js"),
+  asset("../core/wkb.js"),
+  asset("../core/solver.js")
 );
 
 self.postMessage({
