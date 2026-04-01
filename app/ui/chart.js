@@ -162,6 +162,7 @@
       container.textContent = "The mode plot is not available.";
       return;
     }
+    const sourceLabel = data.sourceLabel || "WKB";
     container.className = "chart-stack";
     container.innerHTML = `
       <div class="chart-stack-panel"></div>
@@ -169,7 +170,7 @@
     `;
     const panels = container.querySelectorAll(".chart-stack-panel");
     renderLineChart(panels[0], {
-      title: "Re omega for all overtones",
+      title: `Re omega (${sourceLabel}) for all overtones`,
       x: data.x,
       series: data.branches.map((branch, index) => ({
         label: `n=${branch.n}`,
@@ -178,10 +179,10 @@
       })),
       xLabel: data.parameterName,
       yLabel: "Re omega",
-      ariaLabel: "Real part of the quasinormal modes versus the scanned parameter"
+      ariaLabel: `Real part of the ${sourceLabel} quasinormal modes versus the scanned parameter`
     });
     renderLineChart(panels[1], {
-      title: "Im omega for all overtones",
+      title: `Im omega (${sourceLabel}) for all overtones`,
       x: data.x,
       series: data.branches.map((branch, index) => ({
         label: `n=${branch.n}`,
@@ -190,7 +191,7 @@
       })),
       xLabel: data.parameterName,
       yLabel: "Im omega",
-      ariaLabel: "Imaginary part of the quasinormal modes versus the scanned parameter"
+      ariaLabel: `Imaginary part of the ${sourceLabel} quasinormal modes versus the scanned parameter`
     });
   }
 

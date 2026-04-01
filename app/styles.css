@@ -479,6 +479,12 @@ select:focus {
   color: var(--ink);
 }
 
+.ghost-button.is-active {
+  background: rgba(13, 103, 111, 0.16);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
 .compact-button {
   padding: 8px 14px;
 }

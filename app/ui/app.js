@@ -98,7 +98,8 @@
   let lastRunConfig = null;
   let baseCaseIndex = null;
   let metricRefreshTimer = null;
-  const workerVersion = "20260401e";
+  let modeCurveSource = "wkb";
+  const workerVersion = "20260401g";
 
   function $(id) {
     return document.getElementById(id);
@@ -149,7 +150,10 @@
     clearSelection: resolveElement("clear-selection"),
     orderTableWrap: resolveElement("order-table-wrap"),
     chartWrap: resolveElement("chart-wrap"),
-    modeChartWrap: resolveElement("mode-chart-wrap")
+    modeChartWrap: resolveElement("mode-chart-wrap"),
+    modeSourceTools: resolveElement("mode-source-tools"),
+    modeSourceWkb: resolveElement("mode-source-wkb"),
+    modeSourcePade: resolveElement("mode-source-pade")
   };
 
   function compactNumber(text) {
@@ -204,6 +208,41 @@
       }
       return rightDegree - leftDegree;
     })[0];
+  }
+
+  function updateModeSourceControls() {
+    const visible = Boolean(currentResult && currentResult.cases.length > 1 && varyingParameterNames(currentResult).length === 1);
+    elements.modeSourceTools.classList.toggle("hidden", !visible);
+    if (!visible) {
+      elements.modeSourceWkb.disabled = true;
+      elements.modeSourcePade.disabled = true;
+      elements.modeSourceWkb.classList.remove("is-active");
+      elements.modeSourcePade.classList.remove("is-active");
+      return;
+    }
+    const hasPade = currentResult.cases.some((caseData) =>
+      caseData.overtones.some((overtone) => Boolean(pickDisplayPade(overtone.pade)))
+    );
+    if (!hasPade && modeCurveSource === "pade") {
+      modeCurveSource = "wkb";
+    }
+    elements.modeSourceWkb.disabled = false;
+    elements.modeSourcePade.disabled = !hasPade;
+    elements.modeSourceWkb.classList.toggle("is-active", modeCurveSource === "wkb");
+    elements.modeSourcePade.classList.toggle("is-active", modeCurveSource === "pade" && hasPade);
+  }
+
+  function setModeCurveSource(source) {
+    const next = source === "pade" ? "pade" : "wkb";
+    if (modeCurveSource === next) {
+      updateModeSourceControls();
+      return;
+    }
+    modeCurveSource = next;
+    updateModeSourceControls();
+    if (currentResult && currentResult.cases.length > 1) {
+      renderModeScanChart();
+    }
   }
 
   function formatRelative(text) {
@@ -702,6 +741,7 @@
     flatRows = [];
     selectedRow = null;
     baseCaseIndex = null;
+    modeCurveSource = "wkb";
     elements.summaryLine.textContent = "No computation has been run yet.";
     elements.caseMeta.textContent = "No base case selected.";
     renderWarningStack(elements.globalWarnings, []);
@@ -714,6 +754,7 @@
     elements.selectionMeta.textContent = "No row selected.";
     elements.clearSelection.disabled = true;
     updateExportButton();
+    updateModeSourceControls();
   }
 
   function buildResultsTable(result) {
@@ -848,6 +889,9 @@
   }
 
   function varyingParameterNames(result) {
+    if (!result || !result.parameterNames) {
+      return [];
+    }
     return result.parameterNames.filter((name) => {
       if (!result.cases.length) {
         return false;
@@ -857,16 +901,51 @@
     });
   }
 
+  function buildScanBranches(rows, source) {
+    const overtones = Array.from(new Set(rows[0].caseData.overtones.map((item) => item.n))).sort((left, right) => left - right);
+    return overtones
+      .map((n) => {
+        const values = rows.map((item) => {
+          const mode = item.caseData.overtones.find((entry) => entry.n === n);
+          if (!mode) {
+            return null;
+          }
+          if (source === "pade") {
+            const pade = pickDisplayPade(mode.pade);
+            return pade ? pade.value : null;
+          }
+          return mode.main;
+        });
+        if (values.some((value) => !value)) {
+          return null;
+        }
+        const re = values.map((value) => Number(value.re));
+        const im = values.map((value) => Number(value.im));
+        if (!re.every(Number.isFinite) || !im.every(Number.isFinite)) {
+          return null;
+        }
+        return {
+          n,
+          re,
+          im
+        };
+      })
+      .filter(Boolean);
+  }
+
   function renderModeScanChart() {
     if (!currentResult || currentResult.cases.length < 2) {
+      updateModeSourceControls();
       setEmptyState(elements.modeChartWrap, "Mode curves are available for parameter scans.", "chart-wrap");
       return;
     }
     const varying = varyingParameterNames(currentResult);
     if (varying.length !== 1) {
+      updateModeSourceControls();
       setEmptyState(elements.modeChartWrap, "Mode curves are shown only for a scan in one parameter.", "chart-wrap");
       return;
     }
+    updateModeSourceControls();
     const parameterName = varying[0];
     const rows = currentResult.cases
       .map((caseData) => ({
@@ -879,22 +958,23 @@
       setEmptyState(elements.modeChartWrap, "Not enough points are available to draw the mode curves.", "chart-wrap");
       return;
     }
-    const overtones = Array.from(new Set(rows[0].caseData.overtones.map((item) => item.n))).sort((left, right) => left - right);
-    const branches = overtones
-      .map((n) => ({
-        n,
-        re: rows.map((item) => Number(item.caseData.overtones.find((mode) => mode.n === n).main.re)),
-        im: rows.map((item) => Number(item.caseData.overtones.find((mode) => mode.n === n).main.im))
-      }))
-      .filter((branch) => branch.re.every(Number.isFinite) && branch.im.every(Number.isFinite));
+    const source = modeCurveSource === "pade" ? "pade" : "wkb";
+    const branches = buildScanBranches(rows, source);
     if (!branches.length) {
-      setEmptyState(elements.modeChartWrap, "Could not assemble the overtone branches for the plot.", "chart-wrap");
+      setEmptyState(
+        elements.modeChartWrap,
+        source === "pade"
+          ? "Could not assemble the Pade overtone branches for the plot."
+          : "Could not assemble the overtone branches for the plot.",
+        "chart-wrap"
+      );
       return;
     }
     App.Chart.renderModeScanChart(elements.modeChartWrap, {
       parameterName,
       x: rows.map((item) => item.x),
-      branches
+      branches,
+      sourceLabel: source === "pade" ? "Pade" : `WKB ${currentResult.mainOrder}`
     });
   }
 
@@ -1067,6 +1147,7 @@
     );
     rebuildFlatRows();
     updateExportButton();
+    updateModeSourceControls();
     elements.summaryLine.textContent = `Computed parameter sets: ${result.cases.length}; rows in the table: ${flatRows.length}.`;
     renderWarningStack(elements.globalWarnings, uniqueWarnings(result.cases.flatMap((item) => item.warnings)));
     buildResultsTable(result);
@@ -1166,6 +1247,8 @@
     elements.detectParameters.addEventListener("click", () => detectParameters(undefined, false));
     elements.runButton.addEventListener("click", runComputation);
     elements.exportScan.addEventListener("click", downloadScanExport);
+    elements.modeSourceWkb.addEventListener("click", () => setModeCurveSource("wkb"));
+    elements.modeSourcePade.addEventListener("click", () => setModeCurveSource("pade"));
     elements.sameMetricToggle.addEventListener("change", () => {
       syncSameMetricState();
       scheduleMetricRefresh();
