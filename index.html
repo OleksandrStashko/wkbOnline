@@ -4,11 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>QNM WKB Studio</title>
-    <link rel="stylesheet" href="app/styles.css?v=20260331i">
+    <link rel="stylesheet" href="app/styles.css?v=20260401b">
     <script src="app/core/namespace.js"></script>
     <script src="app/core/parser.js"></script>
-    <script src="app/ui/chart.js?v=20260331i" defer></script>
-    <script src="app/ui/app.js?v=20260331i" defer></script>
+    <script src="app/ui/chart.js?v=20260401a" defer></script>
+    <script src="app/ui/app.js?v=20260401b" defer></script>
   </head>
   <body>
     <div class="page-shell">
@@ -37,6 +37,19 @@
             <div class="panel-actions">
               <button id="detect-parameters" class="ghost-button" type="button">Refresh Parameters</button>
               <button id="open-help" class="ghost-button" type="button">Function Help</button>
+            </div>
+          </div>
+
+          <div class="quick-run-bar">
+            <button id="run-button" class="primary-button quick-run-button" type="button">Compute QNMs</button>
+            <div class="quick-run-meta">
+              <div id="status-line" class="status-line">Idle</div>
+              <div class="progress-wrap compact-progress">
+                <div class="progress-track">
+                  <div id="progress-bar" class="progress-bar"></div>
+                </div>
+                <div id="progress-text" class="progress-text">0%</div>
+              </div>
             </div>
           </div>
 
@@ -183,18 +196,6 @@
             <div id="parameter-list" class="parameter-list"></div>
           </section>
 
-          <div class="actions">
-            <button id="run-button" class="primary-button" type="button">Compute QNMs</button>
-            <div id="status-line" class="status-line">Idle</div>
-          </div>
-
-          <div class="progress-wrap">
-            <div class="progress-track">
-              <div id="progress-bar" class="progress-bar"></div>
-            </div>
-            <div id="progress-text" class="progress-text">0%</div>
-          </div>
-
           <div id="input-error" class="warning-box hidden"></div>
         </section>
 
@@ -220,8 +221,13 @@
           <div class="result-grid">
             <div class="card">
               <div class="card-head">
-                <h3>Mode Table</h3>
-                <p>Click a row to inspect one overtone.</p>
+                <div>
+                  <h3>Mode Table</h3>
+                  <p>Click a row to inspect one overtone.</p>
+                </div>
+                <div class="card-head-tools">
+                  <button id="export-scan" class="ghost-button compact-button hidden" type="button">Export scan CSV</button>
+                </div>
               </div>
               <div id="result-table-wrap" class="table-wrap empty-state">No data.</div>
             </div>

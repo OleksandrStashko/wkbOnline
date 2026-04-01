@@ -98,7 +98,7 @@
   let lastRunConfig = null;
   let baseCaseIndex = null;
   let metricRefreshTimer = null;
-  const workerVersion = "20260331i";
+  const workerVersion = "20260331k";
 
   function $(id) {
     return document.getElementById(id);
@@ -144,6 +144,7 @@
     caseWarnings: resolveElement("case-warnings"),
     caseSummaryWrap: resolveElement("case-summary-wrap", "diagnostics-box"),
     resultTableWrap: resolveElement("result-table-wrap"),
+    exportScan: resolveElement("export-scan"),
     selectionMeta: resolveElement("selection-meta"),
     clearSelection: resolveElement("clear-selection"),
     orderTableWrap: resolveElement("order-table-wrap"),
@@ -347,6 +348,57 @@
     container.className = extraClass || container.className;
     container.classList.add("empty-state");
     container.textContent = text;
+  }
+
+  function hasScanRange(config) {
+    return Object.values((config && config.parameterSpecs) || {}).some((spec) => spec && spec.mode === "range");
+  }
+
+  function updateExportButton() {
+    const visible = Boolean(currentResult && currentResult.cases.length > 1 && hasScanRange(lastRunConfig));
+    elements.exportScan.classList.toggle("hidden", !visible);
+    elements.exportScan.disabled = !visible;
+  }
+
+  function csvEscape(value) {
+    const text = value === null || value === undefined ? "" : String(value);
+    return /[",\n]/.test(text) ? `"${text.replaceAll("\"", "\"\"")}"` : text;
+  }
+
+  function buildScanExportCsv() {
+    if (!currentResult || !hasScanRange(lastRunConfig)) {
+      return null;
+    }
+    const headers = [
+      ...currentResult.parameterNames,
+      "n",
+      `Re omega (WKB ${currentResult.mainOrder})`,
+      `Im omega (WKB ${currentResult.mainOrder})`
+    ];
+    const rows = flatRows.map((row) => [
+      ...currentResult.parameterNames.map((name) => row.caseData.params[name]),
+      row.overtone.n,
+      row.overtone.main.re,
+      row.overtone.main.im
+    ]);
+    return `\ufeff${[headers, ...rows].map((line) => line.map(csvEscape).join(",")).join("\r\n")}`;
+  }
+
+  function downloadScanExport() {
+    const csv = buildScanExportCsv();
+    if (!csv) {
+      return;
+    }
+    const stamp = new Date().toISOString().replace(/[:]/g, "-").replace(/\..+$/, "");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `qnm_scan_${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   function createParameterRow(name, spec) {
@@ -619,6 +671,7 @@
     setEmptyState(elements.modeChartWrap, "Mode curves will appear after computation for a parameter scan or after selecting one overtone.", "chart-wrap");
     elements.selectionMeta.textContent = "No row selected.";
     elements.clearSelection.disabled = true;
+    updateExportButton();
   }
 
   function buildResultsTable(result) {
@@ -630,19 +683,26 @@
       "<th>Warnings</th>"
     ];
     const body = flatRows
-      .map(
-        (row, index) => `
-          <tr class="${selectedRow === index ? "selected-row" : ""}">
+      .map((row, index) => {
+        const classes = [];
+        if (selectedRow === index) {
+          classes.push("selected-row");
+        }
+        if (index > 0 && flatRows[index - 1].caseIndex !== row.caseIndex) {
+          classes.push("group-divider");
+        }
+        return `
+          <tr class="${classes.join(" ")}">
             ${result.parameterNames.map((name) => `<td>${compactNumber(row.caseData.params[name])}</td>`).join("")}
             <td><button class="table-row-button" type="button" data-row-index="${index}">${row.overtone.n}</button></td>
             <td><button class="table-row-button" type="button" data-row-index="${index}" title="${row.overtone.main.re}">${compactNumber(row.overtone.main.re)}</button></td>
             <td><button class="table-row-button" type="button" data-row-index="${index}" title="${row.overtone.main.im}">${compactNumber(row.overtone.main.im)}</button></td>
             <td>${row.caseData.warnings.length}</td>
           </tr>
-        `
-      )
+        `;
+      })
       .join("");
-    elements.resultTableWrap.className = "table-wrap";
+    elements.resultTableWrap.className = "table-wrap result-table-scroll";
     elements.resultTableWrap.innerHTML = `
       <table>
         <thead>
@@ -961,6 +1021,7 @@
       Object.assign({}, caseData, { detailLoaded: Boolean(caseData.plot), detailPending: false, detailFailed: false })
     );
     rebuildFlatRows();
+    updateExportButton();
     elements.summaryLine.textContent = `Computed parameter sets: ${result.cases.length}; rows in the table: ${flatRows.length}.`;
     renderWarningStack(elements.globalWarnings, uniqueWarnings(result.cases.flatMap((item) => item.warnings)));
     buildResultsTable(result);
@@ -1059,6 +1120,7 @@
     elements.presetSelect.addEventListener("change", () => applyPreset(elements.presetSelect.value));
     elements.detectParameters.addEventListener("click", () => detectParameters(undefined, false));
     elements.runButton.addEventListener("click", runComputation);
+    elements.exportScan.addEventListener("click", downloadScanExport);
     elements.sameMetricToggle.addEventListener("change", () => {
       syncSameMetricState();
       scheduleMetricRefresh();
@@ -1084,6 +1146,7 @@
     attachEvents();
     applyPreset("schwarzschild");
     elements.clearSelection.disabled = true;
+    updateExportButton();
     if (window.location.protocol === "file:") {
       setStatus("Opened from a local file; the worker will use the compatibility bootstrap.");
     }

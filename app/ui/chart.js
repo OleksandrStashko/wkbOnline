@@ -200,16 +200,27 @@
       container.textContent = "The WKB-order plot is not available.";
       return;
     }
-    renderLineChart(container, {
-      title: `Mode versus WKB order for n=${data.overtone}`,
+    container.className = "chart-stack";
+    container.innerHTML = `
+      <div class="chart-stack-panel"></div>
+      <div class="chart-stack-panel"></div>
+    `;
+    const panels = container.querySelectorAll(".chart-stack-panel");
+    renderLineChart(panels[0], {
+      title: `Re omega versus WKB order for n=${data.overtone}`,
       x: data.orders,
-      series: [
-        { label: "Re omega", values: data.re, color: "#0e6670" },
-        { label: "Im omega", values: data.im, color: "#c08b2c" }
-      ],
+      series: [{ label: "Re omega", values: data.re, color: "#0e6670" }],
       xLabel: "WKB order",
-      yLabel: "omega",
-      ariaLabel: "Quasinormal mode versus WKB order"
+      yLabel: "Re omega",
+      ariaLabel: "Real part of the quasinormal mode versus WKB order"
+    });
+    renderLineChart(panels[1], {
+      title: `Im omega versus WKB order for n=${data.overtone}`,
+      x: data.orders,
+      series: [{ label: "Im omega", values: data.im, color: "#c08b2c" }],
+      xLabel: "WKB order",
+      yLabel: "Im omega",
+      ariaLabel: "Imaginary part of the quasinormal mode versus WKB order"
     });
   }
 
