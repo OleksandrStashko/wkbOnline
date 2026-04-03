@@ -2,15 +2,12 @@
   const App = self.QNMApp;
 
   function createContext(precision) {
-    const D = self.Decimal;
-    D.set({
+    const D = self.Decimal.clone({
       precision,
-      rounding: D.ROUND_HALF_EVEN,
+      rounding: self.Decimal.ROUND_HALF_EVEN,
       toExpNeg: -1e9,
       toExpPos: 1e9,
-      maxE: 9e15,
-      minE: -9e15,
-      modulo: D.EUCLID,
+      modulo: self.Decimal.EUCLID,
       crypto: false
     });
     const pi = D.acos(-1);
@@ -107,6 +104,10 @@
       return new ComplexDecimal(this.re.neg(), this.im.neg());
     }
 
+    scale(factor) {
+      return new ComplexDecimal(this.re.times(factor), this.im.times(factor));
+    }
+
     mul(other) {
       return new ComplexDecimal(
         this.re.times(other.re).minus(this.im.times(other.im)),
@@ -138,6 +139,14 @@
       const imMagnitude = modulus.minus(this.re).div(ctx.two).sqrt();
       const imPart = this.im.isNegative() ? imMagnitude.neg() : imMagnitude;
       return new ComplexDecimal(rePart, imPart);
+    }
+
+    exp(ctx) {
+      const expRe = this.re.exp();
+      return new ComplexDecimal(
+        expRe.times(this.im.cos()),
+        expRe.times(this.im.sin())
+      );
     }
   }
 
@@ -262,7 +271,7 @@
     return a.plus(b).div(ctx.two);
   }
 
-  function goldenMaximum(fn, left, right, ctx, maxIterations) {
+  function goldenMaximum(fn, left, right, ctx, maxIterations, toleranceOverride) {
     const gr = new ctx.D("0.61803398874989484820458683436563811772030917980576");
     let a = left;
     let b = right;
@@ -270,7 +279,7 @@
     let d = a.plus(b.minus(a).times(gr));
     let fc = fn(c);
     let fd = fn(d);
-    const tolerance = scaleEpsilon(ctx, b.minus(a));
+    const tolerance = toleranceOverride || scaleEpsilon(ctx, b.minus(a));
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
       if (b.minus(a).abs().lessThan(tolerance)) {
         break;
@@ -292,7 +301,9 @@
     const point = a.plus(b).div(ctx.two);
     return {
       point,
-      value: fn(point)
+      value: fn(point),
+      finalWidth: b.minus(a).abs(),
+      tolerance
     };
   }
 

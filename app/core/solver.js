@@ -43,9 +43,26 @@
     };
   }
 
+  function normalizeRadiationConfig(rawConfig, perturbationType) {
+    const ellFloor = perturbationType === "electromagnetic" ? 1 : 0;
+    const greybodyEll = Math.max(ellFloor, Math.floor(Number(rawConfig.greybodyEll)));
+    const greybodyEllMin = Math.max(ellFloor, Math.floor(Number(rawConfig.greybodyEllMin != null ? rawConfig.greybodyEllMin : greybodyEll)));
+    const greybodyEllMax = Math.max(greybodyEllMin, Math.floor(Number(rawConfig.greybodyEllMax != null ? rawConfig.greybodyEllMax : greybodyEll)));
+    const ellCutoff = Math.max(ellFloor, Math.floor(Number(rawConfig.ellCutoff)));
+    return {
+      omegaMin: rawConfig.omegaMin,
+      omegaMax: rawConfig.omegaMax,
+      omegaPoints: Math.max(25, Math.floor(Number(rawConfig.omegaPoints || 121))),
+      greybodyEll,
+      greybodyEllMin,
+      greybodyEllMax,
+      ellCutoff
+    };
+  }
+
   function parseExpressions(config) {
-    const fAst = App.Parser.parseExpression(config.fExpression);
-    const gAst = App.Parser.parseExpression(config.gExpression);
+    const fAst = App.Parser.parseUserExpression(config.fExpression).ast;
+    const gAst = App.Parser.parseUserExpression(config.gExpression).ast;
     const parameterNames = App.Parser.collectParameters([fAst, gAst]);
     return {
       fAst,
@@ -171,16 +188,27 @@
     if (best.index <= 0 || best.index >= coarse.points.length - 1) {
       throw new Error("The potential maximum lies on the boundary of the search interval.");
     }
+    const bracketLeft = coarse.points[best.index - 1];
+    const bracketRight = coarse.points[best.index + 1];
+    const initialBracketWidth = bracketRight.minus(bracketLeft);
+    const bracketDigits = Math.min(50, Math.max(20, Math.floor(ctx.precision / 2)));
+    const bracketTolerance = ctx.ten.pow(-bracketDigits);
     const refined = App.Numerics.goldenMaximum(
       potential.valueAt,
-      coarse.points[best.index - 1],
-      coarse.points[best.index + 1],
+      bracketLeft,
+      bracketRight,
       ctx,
-      180
+      320,
+      bracketTolerance
     );
     return {
       coarse,
       index: best.index,
+      bracketLeft,
+      bracketRight,
+      initialBracketWidth,
+      bracketWidth: refined.finalWidth,
+      bracketTolerance: refined.tolerance,
       point: refined.point,
       value: refined.value
     };
@@ -222,15 +250,95 @@
     return App.Numerics.dmax(ctx, width, localSpacing);
   }
 
-  function buildPlotData(metric, potential, horizonPoint, domainLeft, domainRight, plotSamples, ctx) {
-    const plotRight = App.Numerics.dmin(ctx, domainRight, horizonPoint.plus(new ctx.D("10")));
-    const count = plotSamples % 2 === 0 ? plotSamples + 1 : plotSamples;
-    const plotLeft = horizonPoint;
-    const grid = App.Numerics.buildLinearGrid(plotLeft, plotRight, count, ctx);
-    const values = grid.map((point, index) => (index === 0 ? ctx.zero : potential.valueAt(point)));
+  function refinePeakSpectrally(potential, peakData, domainLeft, domainRight, baseDegree, maxDerivative, ctx) {
+    const refinementOrder = Math.min(maxDerivative, 6);
+    const deltaFactors = [ctx.one, new ctx.D("0.75"), new ctx.D("0.5")];
+    const extraNodes = 16;
+    let current = {
+      ...peakData,
+      point: peakData.point,
+      value: peakData.value
+    };
+    let lastShift = ctx.zero;
+    let iterations = 0;
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      const window = estimateWindow(current, domainLeft, domainRight, ctx);
+      const local = App.Chebyshev.adaptiveCollocation(
+        potential.valueAt,
+        current.point,
+        window,
+        refinementOrder,
+        baseDegree,
+        ctx,
+        {
+          deltaFactors,
+          extraNodes
+        }
+      );
+      const v1 = local.jet[1];
+      const v2 = local.jet[2];
+      if (!v2 || v2.isZero()) {
+        break;
+      }
+      let shift = v1.neg().div(v2);
+      const maxShift = local.delta.abs().times(new ctx.D("0.2"));
+      if (shift.abs().greaterThan(maxShift)) {
+        shift = shift.isNegative() ? maxShift.neg() : maxShift;
+      }
+      lastShift = shift;
+      iterations = iteration + 1;
+      const nextPointRaw = current.point.plus(shift);
+      const nextPoint = nextPointRaw.lessThan(current.bracketLeft)
+        ? current.bracketLeft
+        : nextPointRaw.greaterThan(current.bracketRight)
+          ? current.bracketRight
+          : nextPointRaw;
+      const stepTolerance = App.Numerics.dmax(
+        ctx,
+        App.Numerics.scaleEpsilon(ctx, current.point.abs().plus(ctx.one)).times(100),
+        local.delta.abs().times(ctx.ten.pow(-Math.max(12, Math.min(40, Math.floor(ctx.precision / 3)))))
+      );
+      const actualShift = nextPoint.minus(current.point).abs();
+      current = {
+        ...current,
+        point: nextPoint,
+        value: potential.valueAt(nextPoint)
+      };
+      if (actualShift.lessThan(stepTolerance) || shift.abs().lessThan(stepTolerance)) {
+        break;
+      }
+    }
     return {
-      x: grid.map((value) => value.toString()),
-      potential: values.map((value) => value.toString()),
+      peak: current,
+      refinementShift: lastShift,
+      refinementIterations: iterations
+    };
+  }
+
+  function buildPlotData(metric, potential, plotLeft, plotRight, plotSamples, ctx) {
+    const count = plotSamples % 2 === 0 ? plotSamples + 1 : plotSamples;
+    const grid = App.Numerics.buildLinearGrid(plotLeft, plotRight, count, ctx);
+    const rows = [];
+    for (let index = 0; index < grid.length; index += 1) {
+      const point = grid[index];
+      const potentialValue = safeValue(potential.valueAt, point);
+      const fValue = safeValue(metric.f, point);
+      const gValue = safeValue(metric.g, point);
+      if (!potentialValue || !fValue || !gValue) {
+        continue;
+      }
+      rows.push({
+        x: point.toString(),
+        potential: potentialValue.toString(),
+        f: fValue.toString(),
+        g: gValue.toString()
+      });
+    }
+    return {
+      x: rows.map((row) => row.x),
+      potential: rows.map((row) => row.potential),
+      f: rows.map((row) => row.f),
+      g: rows.map((row) => row.g),
       xLabel: "r",
       yLabel: "V(r)"
     };
@@ -264,13 +372,17 @@
     }
   }
 
-  function solveSingleCase(parsed, config, params, ctx, includePlot) {
+  function minimumEll(perturbationType) {
+    return perturbationType === "electromagnetic" ? 1 : 0;
+  }
+
+  function prepareBarrierCase(parsed, config, params, ell, ctx, includePlot) {
     const warnings = [];
-    if (config.perturbationType === "electromagnetic" && config.ell < 1) {
+    if (config.perturbationType === "electromagnetic" && ell < 1) {
       throw new Error("Electromagnetic perturbations require ell >= 1.");
     }
     const metric = App.Potential.createMetricModel(parsed.fAst, parsed.gAst, params, ctx);
-    const potential = App.Potential.createPotentialModel(metric, config.perturbationType, config.ell, ctx);
+    const potential = App.Potential.createPotentialModel(metric, config.perturbationType, ell, ctx);
     const searchLeft = new ctx.D(config.rMin);
     const searchRight = new ctx.D(config.rMax);
     if (!searchLeft.isPositive() || !searchRight.greaterThan(searchLeft)) {
@@ -294,12 +406,22 @@
     if (coarsePeak.candidates.length > 1) {
       uniquePush(warnings, "Several local extrema of the potential were found; the global maximum was selected.");
     }
-    const peak = refinePeak(potential, coarsePeak, ctx);
+    const maxRequestedOrder = config.mainOrder;
+    const maxDerivative = 2 * maxRequestedOrder;
+    const coarseRefinedPeak = refinePeak(potential, coarsePeak, ctx);
+    const peakRefinement = refinePeakSpectrally(
+      potential,
+      coarseRefinedPeak,
+      domainLeft,
+      domainRight,
+      config.spectralNodes,
+      maxDerivative,
+      ctx
+    );
+    const peak = peakRefinement.peak;
     if (!peak.value.isPositive()) {
       throw new Error("The outer potential barrier is absent or non-positive.");
     }
-    const maxRequestedOrder = config.mainOrder;
-    const maxDerivative = 2 * maxRequestedOrder;
     const window = estimateWindow(peak, domainLeft, domainRight, ctx);
     const spectral = App.Chebyshev.adaptiveCollocation(
       potential.valueAt,
@@ -322,8 +444,14 @@
     const potentialJet = spectral.jet.slice(0, maxDerivative + 1);
     potentialJet[0] = peak.value;
     const derivativeTolerance = ctx.ten.pow(-Math.max(6, Math.floor(ctx.precision / 4)));
-    if (App.Numerics.relativeDifference(ctx, potentialJet[1], ctx.zero).greaterThan(derivativeTolerance)) {
-      uniquePush(warnings, "Numerically, the first derivative at the peak does not vanish with the expected accuracy.");
+    const peakDerivativeAbs = potentialJet[1].abs();
+    const peakDerivativeRelative = App.Numerics.relativeDifference(ctx, potentialJet[1], ctx.zero);
+    const peakCurvatureAbs = potentialJet[2].abs();
+    const peakShiftEstimate = peakCurvatureAbs.isZero() ? null : peakDerivativeAbs.div(peakCurvatureAbs);
+    const peakShiftOverDelta = peakShiftEstimate ? peakShiftEstimate.div(spectral.delta.abs()) : null;
+    const peakShiftWarningThreshold = new ctx.D("1e-8");
+    if (peakShiftOverDelta && peakShiftOverDelta.greaterThan(peakShiftWarningThreshold)) {
+      uniquePush(warnings, "The estimated peak-position error is not negligible compared with the spectral window.");
     }
     potentialJet[1] = ctx.zero;
     const metricJets = metric.jetsAt(peak.point, maxDerivative);
@@ -331,7 +459,75 @@
     if (!star[2].isNegative()) {
       throw new Error("At the candidate peak, V''(r*) >= 0 was obtained, so the barrier maximum is invalid.");
     }
-    const seriesEvaluator = App.WKB.createSeriesEvaluator(star, config.mainOrder, ctx);
+    const plot = includePlot
+      ? buildPlotData(metric, potential, searchLeft, searchRight, config.plotSamples, ctx)
+      : null;
+    return {
+      metric,
+      potential,
+      params,
+      ell,
+      warnings,
+      horizon: horizon.outer,
+      peak,
+      peakRefinement,
+      spectral,
+      star,
+      derivativeTolerance,
+      peakDerivativeAbs,
+      peakDerivativeRelative,
+      peakCurvatureAbs,
+      peakShiftEstimate,
+      peakShiftOverDelta,
+      peakShiftWarningThreshold,
+      plot
+    };
+  }
+
+  function finalizeBarrierCase(barrier) {
+    return {
+      warnings: barrier.warnings,
+      horizon: barrier.horizon.toString(),
+      peak: barrier.peak.point.toString(),
+      peakBracketWidth: barrier.peak.bracketWidth.toString(),
+      peakBracketTolerance: barrier.peak.bracketTolerance.toString(),
+      peakRefinementShift: barrier.peakRefinement.refinementShift.toString(),
+      peakRefinementIterations: String(barrier.peakRefinement.refinementIterations),
+      delta: barrier.spectral.delta.toString(),
+      stability: barrier.spectral.stability.toString(),
+      tailRatio: barrier.spectral.tailRatio.toString(),
+      peakDerivativeAbs: barrier.peakDerivativeAbs.toString(),
+      peakDerivativeRelative: barrier.peakDerivativeRelative.toString(),
+      peakDerivativeTolerance: barrier.derivativeTolerance.toString(),
+      peakCurvatureAbs: barrier.peakCurvatureAbs.toString(),
+      peakShiftEstimate: barrier.peakShiftEstimate ? barrier.peakShiftEstimate.toString() : null,
+      peakShiftOverDelta: barrier.peakShiftOverDelta ? barrier.peakShiftOverDelta.toString() : null,
+      peakShiftWarningThreshold: barrier.peakShiftWarningThreshold.toString(),
+      plot: barrier.plot
+    };
+  }
+
+  function surfaceGravity(metric, horizonPoint, ctx) {
+    const jets = metric.jetsAt(horizonPoint, 1);
+    const product = jets.f[1].times(jets.g[1]);
+    if (product.isNegative()) {
+      throw new Error("The surface gravity is not real at the located horizon.");
+    }
+    return product.sqrt().div(ctx.two);
+  }
+
+  function thermalFactor(omega, temperature, ctx) {
+    if (omega.isZero()) {
+      return temperature;
+    }
+    const ratio = omega.div(temperature);
+    return omega.div(ratio.exp().minus(ctx.one));
+  }
+
+  function solveSingleCase(parsed, config, params, ctx, includePlot) {
+    const barrier = prepareBarrierCase(parsed, config, params, config.ell, ctx, includePlot);
+    const warnings = barrier.warnings;
+    const seriesEvaluator = App.WKB.createSeriesEvaluator(barrier.star, config.mainOrder, ctx);
     const rows = [];
     const orderList = [];
     for (let order = 1; order <= config.mainOrder; order += 1) {
@@ -369,27 +565,17 @@
     if (config.overtoneMax > config.ell) {
       uniquePush(warnings, "The overtone count exceeds ell; WKB reliability usually degrades at high n.");
     }
-    let plot = null;
-    if (includePlot) {
-      plot = buildPlotData(metric, potential, horizon.outer, domainLeft, domainRight, config.plotSamples, ctx);
-    }
-    return {
+    return Object.assign({
       params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
       warnings,
-      horizon: horizon.outer.toString(),
-      peak: peak.point.toString(),
-      delta: spectral.delta.toString(),
-      stability: spectral.stability.toString(),
-      tailRatio: spectral.tailRatio.toString(),
       orders: orderList,
-      overtones: rows,
-      plot
-    };
+      overtones: rows
+    }, finalizeBarrierCase(barrier));
   }
 
   function normalizeParams(rawParams, ctx) {
     return Object.fromEntries(
-      Object.entries(rawParams || {}).map(([name, value]) => [name, new ctx.D(value)])
+      Object.entries(rawParams || {}).map(([name, value]) => [name, new ctx.D(App.Numerics.toPlain(value))])
     );
   }
 
@@ -419,6 +605,233 @@
     return App.Numerics.dmax(baseCtx, reDiff, imDiff).toString();
   }
 
+  function formatParamsForWarning(params) {
+    const parts = Object.entries(params).map(([name, value]) => `${name}=${value.toString()}`);
+    return parts.length ? parts.join(", ") : "default parameters";
+  }
+
+  function prepareFixedRadiationInputs(rawConfig, rawRadiationConfig) {
+    const config = normalizeConfig(rawConfig);
+    const radiation = normalizeRadiationConfig(rawRadiationConfig || {}, config.perturbationType);
+    const ctx = App.Numerics.createContext(config.precision);
+    const parsed = parseExpressions(config);
+    const grid = buildParameterGrid(parsed.parameterNames, config.parameterSpecs, ctx);
+    if (grid.length !== 1) {
+      throw new Error("Radiation & Greybody currently requires fixed parameter values. Remove parameter scan ranges before running it.");
+    }
+    const params = grid[0];
+    const omegaMin = new ctx.D(radiation.omegaMin);
+    const omegaMax = new ctx.D(radiation.omegaMax);
+    if (omegaMin.isNegative() || !omegaMax.greaterThan(omegaMin)) {
+      throw new Error("A non-negative frequency range with omega_max > omega_min is required.");
+    }
+    return {
+      config,
+      radiation,
+      ctx,
+      parsed,
+      params,
+      omegaGrid: App.Numerics.buildLinearGrid(omegaMin, omegaMax, radiation.omegaPoints, ctx),
+      ellFloor: minimumEll(config.perturbationType)
+    };
+  }
+
+  function warningPrefix(params, ell) {
+    return `[${formatParamsForWarning(params)}${ell !== undefined ? `, ell=${ell}` : ""}]`;
+  }
+
+  function buildTransmissionWarnings(ctx, ell, evaluations) {
+    const warnings = [];
+    const residualThreshold = ctx.ten.pow(-Math.max(8, Math.floor(ctx.precision / 3)));
+    if (evaluations.some((item) => item.transmissionImagResidual.greaterThan(residualThreshold))) {
+      uniquePush(warnings, `[ell=${ell}] The WKB transmission coefficient has a noticeable imaginary residual after applying GBFactor.`);
+    }
+    if (evaluations.some((item) => item.transmission.lessThan(ctx.zero) || item.transmission.greaterThan(ctx.one))) {
+      uniquePush(warnings, `[ell=${ell}] The WKB transmission coefficient moved outside the physical [0,1] interval.`);
+    }
+    return warnings;
+  }
+
+  function serializeParams(params) {
+    return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()]));
+  }
+
+  function prepareGreybodyParallelPlan(rawConfig, rawRadiationConfig) {
+    const config = normalizeConfig(rawConfig);
+    const radiation = normalizeRadiationConfig(rawRadiationConfig || {}, config.perturbationType);
+    const ctx = App.Numerics.createContext(config.precision);
+    const parsed = parseExpressions(config);
+    const grid = buildParameterGrid(parsed.parameterNames, config.parameterSpecs, ctx);
+    if (!grid.length) {
+      throw new Error("Could not build the parameter grid.");
+    }
+    const omegaMin = new ctx.D(radiation.omegaMin);
+    const omegaMax = new ctx.D(radiation.omegaMax);
+    if (omegaMin.isNegative() || !omegaMax.greaterThan(omegaMin)) {
+      throw new Error("A non-negative frequency range with omega_max > omega_min is required.");
+    }
+    const omegaGrid = App.Numerics.buildLinearGrid(omegaMin, omegaMax, radiation.omegaPoints, ctx);
+    const ellValues = [];
+    for (let ell = radiation.greybodyEllMin; ell <= radiation.greybodyEllMax; ell += 1) {
+      ellValues.push(ell);
+    }
+    const warnings = [];
+    const tasks = [];
+    let diagnosticBarrier = null;
+    let diagnosticKappa = null;
+    let diagnosticTemperature = null;
+    let diagnosticParams = null;
+    let diagnosticEll = null;
+    for (const params of grid) {
+      for (const ell of ellValues) {
+        try {
+          const barrier = prepareBarrierCase(parsed, config, params, ell, ctx, !diagnosticBarrier);
+          const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
+          const temperature = kappa.div(ctx.two.times(ctx.pi));
+          barrier.warnings.forEach((warning) => uniquePush(warnings, `${warningPrefix(params, ell)} ${warning}`));
+          tasks.push({
+            id: `${tasks.length}`,
+            ell,
+            params: serializeParams(params),
+            label: `${formatParamsForWarning(params)}, ell=${ell}`,
+            kernel: App.WKB.prepareTransmissionKernel(barrier.star, config.mainOrder, ctx)
+          });
+          if (!diagnosticBarrier) {
+            diagnosticBarrier = barrier;
+            diagnosticKappa = kappa;
+            diagnosticTemperature = temperature;
+            diagnosticParams = params;
+            diagnosticEll = ell;
+          }
+        } catch (error) {
+          uniquePush(warnings, `${warningPrefix(params, ell)} ${error && error.message ? error.message : String(error)}`);
+        }
+      }
+    }
+    if (!tasks.length || !diagnosticBarrier || !diagnosticKappa || !diagnosticTemperature || !diagnosticParams) {
+      throw new Error("No valid greybody curve was obtained for the requested parameter/ell range.");
+    }
+    return {
+      kind: "greybody",
+      precision: config.precision,
+      parameterNames: parsed.parameterNames,
+      perturbationType: config.perturbationType,
+      mainOrder: config.mainOrder,
+      ell: diagnosticEll,
+      ellMin: radiation.greybodyEllMin,
+      ellMax: radiation.greybodyEllMax,
+      horizon: diagnosticBarrier.horizon.toString(),
+      surfaceGravity: diagnosticKappa.toString(),
+      temperature: diagnosticTemperature.toString(),
+      params: serializeParams(diagnosticParams),
+      omegaGrid: omegaGrid.map((item) => item.toString()),
+      warnings,
+      tasks,
+      diagnostics: Object.assign({
+        kind: "greybody",
+        ell: diagnosticEll,
+        params: serializeParams(diagnosticParams)
+      }, finalizeBarrierCase(diagnosticBarrier))
+    };
+  }
+
+  function prepareHawkingParallelPlan(rawConfig, rawRadiationConfig) {
+    const prepared = prepareFixedRadiationInputs(rawConfig, rawRadiationConfig);
+    const { config, radiation, ctx, parsed, params, omegaGrid, ellFloor } = prepared;
+    const warnings = [];
+    const tasks = [];
+    let diagnosticBarrier = null;
+    let diagnosticKappa = null;
+    let diagnosticTemperature = null;
+    for (let ell = ellFloor; ell <= radiation.ellCutoff; ell += 1) {
+      try {
+        const barrier = prepareBarrierCase(parsed, config, params, ell, ctx, !diagnosticBarrier);
+        const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
+        const temperature = kappa.div(ctx.two.times(ctx.pi));
+        if (!temperature.isPositive()) {
+          throw new Error("The Hawking temperature is non-positive.");
+        }
+        barrier.warnings.forEach((warning) => uniquePush(warnings, `[ell=${ell}] ${warning}`));
+        tasks.push({
+          id: `${tasks.length}`,
+          ell,
+          params: serializeParams(params),
+          label: `ell=${ell}`,
+          temperature: temperature.toString(),
+          kernel: App.WKB.prepareTransmissionKernel(barrier.star, config.mainOrder, ctx)
+        });
+        if (!diagnosticBarrier) {
+          diagnosticBarrier = barrier;
+          diagnosticKappa = kappa;
+          diagnosticTemperature = temperature;
+        }
+      } catch (error) {
+        uniquePush(warnings, `[ell=${ell}] ${error && error.message ? error.message : String(error)}`);
+      }
+    }
+    if (!tasks.length || !diagnosticBarrier || !diagnosticKappa || !diagnosticTemperature) {
+      throw new Error("No valid ell contribution was obtained for the Hawking spectrum.");
+    }
+    return {
+      kind: "hawking",
+      precision: config.precision,
+      parameterNames: parsed.parameterNames,
+      perturbationType: config.perturbationType,
+      mainOrder: config.mainOrder,
+      ellCutoff: radiation.ellCutoff,
+      params: serializeParams(params),
+      omegaGrid: omegaGrid.map((item) => item.toString()),
+      horizon: diagnosticBarrier.horizon.toString(),
+      surfaceGravity: diagnosticKappa.toString(),
+      temperature: diagnosticTemperature.toString(),
+      warnings,
+      tasks,
+      diagnostics: Object.assign({
+        kind: "hawking",
+        ell: tasks[0].ell
+      }, finalizeBarrierCase(diagnosticBarrier))
+    };
+  }
+
+  function evaluateRadiationChunk(chunk) {
+    const ctx = App.Numerics.createContext(chunk.precision);
+    const omegaGrid = chunk.omegas.map((item) => new ctx.D(item));
+    const residualThreshold = ctx.ten.pow(-Math.max(8, Math.floor(ctx.precision / 3)));
+    const values = [];
+    const transmissions = [];
+    let imagResidualWarning = false;
+    let intervalWarning = false;
+    for (const omega of omegaGrid) {
+      const evaluated = App.WKB.evaluateTransmissionKernel(chunk.kernel, omega, ctx);
+      transmissions.push(evaluated.transmission.toString());
+      if (evaluated.transmissionImagResidual.greaterThan(residualThreshold)) {
+        imagResidualWarning = true;
+      }
+      if (evaluated.transmission.lessThan(ctx.zero) || evaluated.transmission.greaterThan(ctx.one)) {
+        intervalWarning = true;
+      }
+      if (chunk.kind === "hawking") {
+        const temperature = new ctx.D(chunk.temperature);
+        const emission = new ctx.D(2 * chunk.ell + 1)
+          .times(evaluated.transmission)
+          .times(thermalFactor(omega, temperature, ctx))
+          .div(ctx.two.times(ctx.pi));
+        values.push(emission.toString());
+      } else {
+        values.push(evaluated.transmission.toString());
+      }
+    }
+    return {
+      taskId: chunk.taskId,
+      start: chunk.start,
+      end: chunk.end,
+      values,
+      transmissions,
+      imagResidualWarning,
+      intervalWarning
+    };
+  }
+
   function solveConfiguration(rawConfig, progressCallback) {
     const config = normalizeConfig(rawConfig);
     const ctx = App.Numerics.createContext(config.precision);
@@ -428,8 +841,18 @@
       throw new Error("Could not build the parameter grid.");
     }
     const cases = [];
+    const warnings = [];
+    let plotAssigned = false;
     for (let index = 0; index < grid.length; index += 1) {
-      cases.push(finalizeCase(parsed, config, grid[index], config.storePlots || index === 0));
+      try {
+        const caseData = finalizeCase(parsed, config, grid[index], config.storePlots || !plotAssigned);
+        if (caseData.plot) {
+          plotAssigned = true;
+        }
+        cases.push(caseData);
+      } catch (error) {
+        uniquePush(warnings, `[${formatParamsForWarning(grid[index])}] ${error && error.message ? error.message : String(error)}`);
+      }
       if (progressCallback) {
         progressCallback({
           completed: index + 1,
@@ -437,10 +860,14 @@
         });
       }
     }
+    if (!cases.length) {
+      throw new Error(warnings[0] || "No valid parameter points were computed.");
+    }
     return {
       parameterNames: parsed.parameterNames,
       mainOrder: config.mainOrder,
       showAllOrders: config.showAllOrders,
+      warnings,
       cases
     };
   }
@@ -453,11 +880,296 @@
     return finalizeCase(parsed, config, params);
   }
 
+  function solveAnalysis(rawConfig, progressCallback) {
+    const config = normalizeConfig(rawConfig);
+    const ctx = App.Numerics.createContext(config.precision);
+    const parsed = parseExpressions(config);
+    const grid = buildParameterGrid(parsed.parameterNames, config.parameterSpecs, ctx);
+    if (!grid.length) {
+      throw new Error("Could not build the parameter grid.");
+      }
+      const warnings = [];
+      const cases = [];
+      const plotLeft = new ctx.D(config.rMin);
+      const plotRight = new ctx.D(config.rMax);
+      if (!plotLeft.isPositive() || !plotRight.greaterThan(plotLeft)) {
+        throw new Error("A positive radial plotting interval with r_max > r_min is required.");
+      }
+      for (let index = 0; index < grid.length; index += 1) {
+        try {
+          const metric = App.Potential.createMetricModel(parsed.fAst, parsed.gAst, grid[index], ctx);
+          const potential = App.Potential.createPotentialModel(metric, config.perturbationType, config.ell, ctx);
+          cases.push({
+            params: Object.fromEntries(Object.entries(grid[index]).map(([name, value]) => [name, value.toString()])),
+            warnings: [],
+            plot: buildPlotData(metric, potential, plotLeft, plotRight, config.plotSamples, ctx)
+          });
+        } catch (error) {
+          uniquePush(warnings, `[${formatParamsForWarning(grid[index])}] ${error && error.message ? error.message : String(error)}`);
+        }
+        if (progressCallback) {
+        progressCallback({
+          completed: index + 1,
+          total: grid.length
+        });
+      }
+    }
+    if (!cases.length) {
+      throw new Error(warnings[0] || "No valid parameter point was available for analysis.");
+    }
+    return {
+      parameterNames: parsed.parameterNames,
+      warnings,
+      cases
+    };
+  }
+
+  function solveGreybody(rawConfig, rawRadiationConfig, progressCallback) {
+    const config = normalizeConfig(rawConfig);
+    const radiation = normalizeRadiationConfig(rawRadiationConfig || {}, config.perturbationType);
+    const ctx = App.Numerics.createContext(config.precision);
+    const parsed = parseExpressions(config);
+    const grid = buildParameterGrid(parsed.parameterNames, config.parameterSpecs, ctx);
+    if (!grid.length) {
+      throw new Error("Could not build the parameter grid.");
+    }
+    const omegaMin = new ctx.D(radiation.omegaMin);
+    const omegaMax = new ctx.D(radiation.omegaMax);
+    if (omegaMin.isNegative() || !omegaMax.greaterThan(omegaMin)) {
+      throw new Error("A non-negative frequency range with omega_max > omega_min is required.");
+    }
+    const omegaGrid = App.Numerics.buildLinearGrid(omegaMin, omegaMax, radiation.omegaPoints, ctx);
+    const ellValues = [];
+    for (let ell = radiation.greybodyEllMin; ell <= radiation.greybodyEllMax; ell += 1) {
+      ellValues.push(ell);
+    }
+    const total = grid.length * ellValues.length * omegaGrid.length;
+    let completed = 0;
+    const warnings = [];
+    const curves = [];
+    let diagnosticBarrier = null;
+    let diagnosticKappa = null;
+    let diagnosticTemperature = null;
+    let diagnosticParams = null;
+    let diagnosticEll = null;
+    for (const params of grid) {
+      for (const ell of ellValues) {
+        try {
+          const barrier = prepareBarrierCase(parsed, config, params, ell, ctx, !diagnosticBarrier);
+          const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
+          const temperature = kappa.div(ctx.two.times(ctx.pi));
+          const transmissionEvaluator = App.WKB.createTransmissionEvaluator(barrier.star, config.mainOrder, ctx);
+          const evaluations = [];
+          const values = [];
+          for (const omega of omegaGrid) {
+            const evaluated = transmissionEvaluator(omega).main;
+            evaluations.push(evaluated);
+            values.push(evaluated.transmission.toString());
+            completed += 1;
+            if (progressCallback) {
+              progressCallback({
+                completed,
+                total
+              });
+            }
+          }
+          barrier.warnings.forEach((warning) => uniquePush(warnings, `${warningPrefix(params, ell)} ${warning}`));
+          buildTransmissionWarnings(ctx, ell, evaluations).forEach((warning) => uniquePush(warnings, `${warningPrefix(params)} ${warning.replace(/^\[ell=\d+\]\s*/, "")}`));
+          curves.push({
+            params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
+            ell,
+            label: `${formatParamsForWarning(params)}, ell=${ell}`,
+            values
+          });
+          if (!diagnosticBarrier) {
+            diagnosticBarrier = barrier;
+            diagnosticKappa = kappa;
+            diagnosticTemperature = temperature;
+            diagnosticParams = params;
+            diagnosticEll = ell;
+          }
+        } catch (error) {
+          completed += omegaGrid.length;
+          if (progressCallback) {
+            progressCallback({
+              completed,
+              total
+            });
+          }
+          uniquePush(warnings, `${warningPrefix(params, ell)} ${error && error.message ? error.message : String(error)}`);
+        }
+      }
+    }
+    if (!curves.length || !diagnosticBarrier || !diagnosticKappa || !diagnosticTemperature || !diagnosticParams) {
+      throw new Error("No valid greybody curve was obtained for the requested parameter/ell range.");
+    }
+    return {
+      params: Object.fromEntries(Object.entries(diagnosticParams).map(([name, value]) => [name, value.toString()])),
+      parameterNames: parsed.parameterNames,
+      perturbationType: config.perturbationType,
+      mainOrder: config.mainOrder,
+      ell: diagnosticEll,
+      ellMin: radiation.greybodyEllMin,
+      ellMax: radiation.greybodyEllMax,
+      successfulCurveCount: curves.length,
+      horizon: diagnosticBarrier.horizon.toString(),
+      surfaceGravity: diagnosticKappa.toString(),
+      temperature: diagnosticTemperature.toString(),
+      warnings,
+      greybody: {
+        x: omegaGrid.map((item) => item.toString()),
+        curves
+      },
+      diagnostics: Object.assign({
+        kind: "greybody",
+        ell: diagnosticEll,
+        params: Object.fromEntries(Object.entries(diagnosticParams).map(([name, value]) => [name, value.toString()]))
+      }, finalizeBarrierCase(diagnosticBarrier))
+    };
+  }
+
+  function solveHawking(rawConfig, rawRadiationConfig, progressCallback) {
+    const prepared = prepareFixedRadiationInputs(rawConfig, rawRadiationConfig);
+    const { config, radiation, ctx, parsed, params, omegaGrid, ellFloor } = prepared;
+    const totalSteps = (radiation.ellCutoff - ellFloor + 1) * omegaGrid.length;
+    let completed = 0;
+    const warnings = [];
+    const partials = [];
+    const greybodyCurves = [];
+    let diagnosticBarrier = null;
+    let diagnosticKappa = null;
+    let diagnosticTemperature = null;
+    const successfulElls = [];
+    for (let ell = ellFloor; ell <= radiation.ellCutoff; ell += 1) {
+      try {
+        const barrier = prepareBarrierCase(parsed, config, params, ell, ctx, !diagnosticBarrier);
+        const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
+        const temperature = kappa.div(ctx.two.times(ctx.pi));
+        if (!temperature.isPositive()) {
+          throw new Error("The Hawking temperature is non-positive.");
+        }
+        const transmissionEvaluator = App.WKB.createTransmissionEvaluator(barrier.star, config.mainOrder, ctx);
+        const evaluations = [];
+        const values = [];
+        for (let index = 0; index < omegaGrid.length; index += 1) {
+          const omega = omegaGrid[index];
+          const evaluated = transmissionEvaluator(omega).main;
+          evaluations.push(evaluated);
+          const degeneracy = new ctx.D(2 * ell + 1);
+          const emission = degeneracy
+            .times(evaluated.transmission)
+            .times(thermalFactor(omega, temperature, ctx))
+            .div(ctx.two.times(ctx.pi));
+          values.push(emission.toString());
+          completed += 1;
+          if (progressCallback) {
+            progressCallback({
+              completed,
+              total: totalSteps
+            });
+          }
+        }
+        barrier.warnings.forEach((warning) => uniquePush(warnings, `[ell=${ell}] ${warning}`));
+        buildTransmissionWarnings(ctx, ell, evaluations).forEach((warning) => uniquePush(warnings, warning));
+        partials.push({
+          ell,
+          values
+        });
+        greybodyCurves.push({
+          ell,
+          label: `ell=${ell}`,
+          params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
+          values: evaluations.map((item) => item.transmission.toString())
+        });
+        successfulElls.push(ell);
+        if (!diagnosticBarrier) {
+          diagnosticBarrier = barrier;
+          diagnosticKappa = kappa;
+          diagnosticTemperature = temperature;
+        }
+      } catch (error) {
+        completed += omegaGrid.length;
+        if (progressCallback) {
+          progressCallback({
+            completed,
+            total: totalSteps
+          });
+        }
+        uniquePush(warnings, `[ell=${ell}] ${error && error.message ? error.message : String(error)}`);
+      }
+    }
+    if (!partials.length || !diagnosticBarrier || !diagnosticKappa || !diagnosticTemperature) {
+      throw new Error("No valid ell contribution was obtained for the Hawking spectrum.");
+    }
+    const totalSpectrum = omegaGrid.map((_, index) =>
+      partials.reduce((sum, item) => sum.plus(new ctx.D(item.values[index])), ctx.zero).toString()
+    );
+    return {
+      params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
+      parameterNames: parsed.parameterNames,
+      perturbationType: config.perturbationType,
+      mainOrder: config.mainOrder,
+      ellCutoff: radiation.ellCutoff,
+      successfulElls,
+      horizon: diagnosticBarrier.horizon.toString(),
+      surfaceGravity: diagnosticKappa.toString(),
+      temperature: diagnosticTemperature.toString(),
+      warnings,
+      greybodyProfile: {
+        x: omegaGrid.map((item) => item.toString()),
+        curves: greybodyCurves
+      },
+      spectrum: {
+        x: omegaGrid.map((item) => item.toString()),
+        total: totalSpectrum,
+        partials
+      },
+      diagnostics: Object.assign({
+        kind: "hawking",
+        ell: successfulElls[0]
+      }, finalizeBarrierCase(diagnosticBarrier))
+    };
+  }
+
+  function solveRadiation(rawConfig, rawRadiationConfig, progressCallback) {
+    const greybody = solveGreybody(rawConfig, rawRadiationConfig, null);
+    const hawking = solveHawking(rawConfig, rawRadiationConfig, progressCallback);
+    return {
+      params: hawking.params,
+      parameterNames: hawking.parameterNames,
+      perturbationType: hawking.perturbationType,
+      mainOrder: hawking.mainOrder,
+      greybodyEll: greybody.ell,
+      ellCutoff: hawking.ellCutoff,
+      horizon: hawking.horizon,
+      surfaceGravity: hawking.surfaceGravity,
+      temperature: hawking.temperature,
+      warnings: Array.from(new Set(greybody.warnings.concat(hawking.warnings))),
+      greybody: {
+        x: greybody.greybody.x,
+        curves: [{
+          ell: greybody.ell,
+          values: greybody.greybody.values
+        }]
+      },
+      spectrum: hawking.spectrum,
+      diagnostics: hawking.diagnostics
+    };
+  }
+
   App.Solver = {
     normalizeConfig,
+    normalizeRadiationConfig,
     parseExpressions,
     buildParameterGrid,
     solveConfiguration,
-    solveCase
+    solveCase,
+    solveAnalysis,
+    solveGreybody,
+    solveHawking,
+    solveRadiation,
+    prepareGreybodyParallelPlan,
+    prepareHawkingParallelPlan,
+    evaluateRadiationChunk
   };
 })();

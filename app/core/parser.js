@@ -23,6 +23,60 @@
     "tanh"
   ]);
   const CONSTANTS = new Set(["pi", "e"]);
+  const LATEX_IDENTIFIERS = {
+    alpha: "alpha",
+    beta: "beta",
+    gamma: "gamma",
+    delta: "delta",
+    epsilon: "epsilon",
+    varepsilon: "varepsilon",
+    zeta: "zeta",
+    eta: "eta",
+    theta: "theta",
+    vartheta: "vartheta",
+    iota: "iota",
+    kappa: "kappa",
+    lambda: "lambda",
+    mu: "mu",
+    nu: "nu",
+    xi: "xi",
+    pi: "pi",
+    rho: "rho",
+    varrho: "varrho",
+    sigma: "sigma",
+    tau: "tau",
+    upsilon: "upsilon",
+    phi: "phi",
+    varphi: "varphi",
+    chi: "chi",
+    psi: "psi",
+    omega: "omega",
+    Gamma: "Gamma",
+    Delta: "Delta",
+    Theta: "Theta",
+    Lambda: "Lambda",
+    Xi: "Xi",
+    Pi: "Pi",
+    Sigma: "Sigma",
+    Upsilon: "Upsilon",
+    Phi: "Phi",
+    Psi: "Psi",
+    Omega: "Omega"
+  };
+  const LATEX_IGNORED = new Set([
+    ",",
+    ";",
+    ":",
+    "!",
+    "quad",
+    "qquad",
+    "left",
+    "right"
+  ]);
+  const LATEX_SYMBOLS = {
+    cdot: "*",
+    times: "*"
+  };
 
   function isDigit(ch) {
     return ch >= "0" && ch <= "9";
@@ -38,6 +92,253 @@
 
   function isIdentifierPart(ch) {
     return isIdentifierStart(ch) || isDigit(ch);
+  }
+
+  function skipWhitespace(input, index) {
+    let position = index;
+    while (position < input.length && /\s/u.test(input[position])) {
+      position += 1;
+    }
+    return position;
+  }
+
+  function readCommandName(input, index) {
+    if (index >= input.length) {
+      throw new Error("Incomplete LaTeX command at the end of the expression.");
+    }
+    if (!/[A-Za-z]/u.test(input[index])) {
+      return { name: input[index], end: index + 1 };
+    }
+    let end = index;
+    while (end < input.length && /[A-Za-z]/u.test(input[end])) {
+      end += 1;
+    }
+    return {
+      name: input.slice(index, end),
+      end
+    };
+  }
+
+  function readBalanced(input, index, open, close) {
+    if (input[index] !== open) {
+      throw new Error(`Expected "${open}" at position ${index}.`);
+    }
+    let depth = 1;
+    let position = index + 1;
+    while (position < input.length && depth > 0) {
+      const ch = input[position];
+      if (ch === "\\") {
+        const command = readCommandName(input, position + 1);
+        position = command.end;
+        continue;
+      }
+      if (ch === open) {
+        depth += 1;
+      } else if (ch === close) {
+        depth -= 1;
+      }
+      position += 1;
+    }
+    if (depth !== 0) {
+      throw new Error(`Unmatched "${open}" in LaTeX expression.`);
+    }
+    return {
+      content: input.slice(index + 1, position - 1),
+      end: position
+    };
+  }
+
+  function flattenIdentifier(text) {
+    const compact = text.replace(/\s+/gu, "");
+    if (!compact) {
+      throw new Error("Empty identifier fragment in LaTeX expression.");
+    }
+    if (/[^A-Za-z0-9_]/u.test(compact)) {
+      throw new Error(`Unsupported identifier fragment "${compact}" in LaTeX expression.`);
+    }
+    return compact;
+  }
+
+  function readLatexSubscript(input, index) {
+    const position = skipWhitespace(input, index);
+    if (input[position] !== "_") {
+      return { suffix: "", end: index };
+    }
+    const after = skipWhitespace(input, position + 1);
+    if (after >= input.length) {
+      throw new Error("Incomplete LaTeX subscript at the end of the expression.");
+    }
+    if (input[after] === "{") {
+      const group = readBalanced(input, after, "{", "}");
+      return {
+        suffix: `_${flattenIdentifier(normalizeExpressionInput(group.content))}`,
+        end: group.end
+      };
+    }
+    if (input[after] === "\\") {
+      const command = readCommandName(input, after + 1);
+      const mapped = LATEX_IDENTIFIERS[command.name] || command.name;
+      return {
+        suffix: `_${flattenIdentifier(mapped)}`,
+        end: command.end
+      };
+    }
+    let end = after;
+    while (end < input.length && isIdentifierPart(input[end])) {
+      end += 1;
+    }
+    if (end === after) {
+      throw new Error(`Unsupported LaTeX subscript near position ${after}.`);
+    }
+    return {
+      suffix: `_${input.slice(after, end)}`,
+      end
+    };
+  }
+
+  function convertLatex(input) {
+    let index = 0;
+    let output = "";
+    while (index < input.length) {
+      const ch = input[index];
+      if (/\s/u.test(ch)) {
+        output += " ";
+        index += 1;
+        continue;
+      }
+      if (ch === "\\") {
+        const command = readCommandName(input, index + 1);
+        index = command.end;
+        if (LATEX_IGNORED.has(command.name)) {
+          continue;
+        }
+        if (command.name === "frac") {
+          const numeratorStart = skipWhitespace(input, index);
+          if (input[numeratorStart] !== "{") {
+            throw new Error("LaTeX \\frac requires a braced numerator.");
+          }
+          const numerator = readBalanced(input, numeratorStart, "{", "}");
+          const denominatorStart = skipWhitespace(input, numerator.end);
+          if (input[denominatorStart] !== "{") {
+            throw new Error("LaTeX \\frac requires a braced denominator.");
+          }
+          const denominator = readBalanced(input, denominatorStart, "{", "}");
+          output += `((${normalizeExpressionInput(numerator.content)})/(${normalizeExpressionInput(denominator.content)}))`;
+          index = denominator.end;
+          continue;
+        }
+        if (command.name === "sqrt") {
+          let position = skipWhitespace(input, index);
+          let root = null;
+          if (input[position] === "[") {
+            const rootGroup = readBalanced(input, position, "[", "]");
+            root = normalizeExpressionInput(rootGroup.content);
+            position = rootGroup.end;
+          }
+          position = skipWhitespace(input, position);
+          if (input[position] !== "{") {
+            throw new Error("LaTeX \\sqrt requires a braced argument.");
+          }
+          const body = readBalanced(input, position, "{", "}");
+          const normalizedBody = normalizeExpressionInput(body.content);
+          output += root ? `pow((${normalizedBody}), (1/(${root})))` : `sqrt(${normalizedBody})`;
+          index = body.end;
+          continue;
+        }
+        if (command.name === "operatorname" || command.name === "mathrm" || command.name === "text") {
+          const groupStart = skipWhitespace(input, index);
+          if (input[groupStart] !== "{") {
+            throw new Error(`LaTeX \\${command.name} requires a braced argument.`);
+          }
+          const group = readBalanced(input, groupStart, "{", "}");
+          output += flattenIdentifier(normalizeExpressionInput(group.content));
+          index = group.end;
+          continue;
+        }
+        if (LATEX_SYMBOLS[command.name]) {
+          output += LATEX_SYMBOLS[command.name];
+          continue;
+        }
+        if (LATEX_IDENTIFIERS[command.name]) {
+          const subscript = readLatexSubscript(input, index);
+          output += LATEX_IDENTIFIERS[command.name] + subscript.suffix;
+          index = subscript.end;
+          continue;
+        }
+        if (FUNCTIONS.has(command.name) || CONSTANTS.has(command.name)) {
+          output += command.name;
+          continue;
+        }
+        throw new Error(`Unsupported LaTeX command "\\${command.name}".`);
+      }
+      if (ch === "{") {
+        const group = readBalanced(input, index, "{", "}");
+        output += `(${normalizeExpressionInput(group.content)})`;
+        index = group.end;
+        continue;
+      }
+      if (ch === "}") {
+        throw new Error(`Unexpected "}" at position ${index}.`);
+      }
+      if (isIdentifierStart(ch)) {
+        let end = index + 1;
+        while (end < input.length && isIdentifierPart(input[end])) {
+          end += 1;
+        }
+        const subscript = readLatexSubscript(input, end);
+        output += input.slice(index, end) + subscript.suffix;
+        index = subscript.end;
+        continue;
+      }
+      output += ch;
+      index += 1;
+    }
+    return output;
+  }
+
+  function insertImplicitMultiplication(input) {
+    const tokens = tokenize(input);
+    const parts = [];
+    let previous = null;
+    for (const token of tokens) {
+      if (token.type === "eof") {
+        break;
+      }
+      const previousIsValue = previous && (previous.type === "number" || previous.type === "identifier" || previous.type === ")");
+      const currentStartsValue = token.type === "number" || token.type === "identifier" || token.type === "(";
+      const isFunctionCall = previous && previous.type === "identifier" && token.type === "(" && FUNCTIONS.has(previous.value);
+      if (previousIsValue && currentStartsValue && !isFunctionCall) {
+        parts.push("*");
+      }
+      parts.push(token.value);
+      previous = token;
+    }
+    return parts.join("");
+  }
+
+  function normalizeExpressionInput(input) {
+    const source = String(input === null || input === undefined ? "" : input)
+      .replace(/\u2212/gu, "-")
+      .replace(/\u00d7/gu, "*")
+      .replace(/\u2215/gu, "/")
+      .replace(/\u03c0/gu, "pi")
+      .trim();
+    if (!source) {
+      return "";
+    }
+    if (!/[\\{}]/u.test(source)) {
+      return source;
+    }
+    const converted = convertLatex(source);
+    return insertImplicitMultiplication(converted);
+  }
+
+  function parseUserExpression(input) {
+    const normalized = normalizeExpressionInput(input);
+    return {
+      normalized,
+      ast: parseExpression(normalized)
+    };
   }
 
   function tokenize(input) {
@@ -555,6 +856,8 @@
 
   App.Parser = {
     parseExpression,
+    normalizeExpressionInput,
+    parseUserExpression,
     collectParameters,
     createEvaluator,
     createDualEvaluator,

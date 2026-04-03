@@ -1,0 +1,901 @@
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+.react-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background:
+    radial-gradient(circle at top left, rgba(250, 245, 229, 0.9), transparent 32%),
+    linear-gradient(180deg, #e9efe7 0%, #dbe7de 100%);
+  color: var(--ink);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(31, 44, 43, 0.08);
+  background: rgba(243, 245, 238, 0.92);
+  backdrop-filter: blur(14px);
+}
+
+.topbar-title h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.topbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-icon-button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(13, 103, 111, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--accent-strong);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.title-icon-button:hover {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.topbar-title p {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.status-cluster {
+  min-width: 240px;
+}
+
+.workspace-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 560px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 24px 24px;
+}
+
+.sidebar-column,
+.main-column {
+  min-height: 0;
+}
+
+.sidebar-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 18px;
+}
+
+.reference-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reference-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(13, 103, 111, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.reference-item strong {
+  font-size: 0.95rem;
+}
+
+.reference-item span {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.reference-item:hover {
+  border-color: rgba(13, 103, 111, 0.24);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.references-modal-card {
+  width: min(760px, calc(100vw - 48px));
+}
+
+.reference-credits {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.reference-credits p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.modal-reference-list {
+  padding-bottom: 4px;
+}
+
+.metric-section,
+.numeric-section {
+  min-height: 0;
+}
+
+.metric-section .section-card,
+.numeric-section .section-card,
+.main-card {
+  height: 100%;
+}
+
+.section-scroll {
+  height: 100%;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.metric-block {
+  display: grid;
+  gap: 16px;
+}
+
+.main-column {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  padding: 14px 16px;
+  border: 1px solid rgba(13, 103, 111, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.summary-card span {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.summary-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1rem;
+}
+
+.results-layout {
+  min-height: 0;
+  display: block;
+}
+
+.workspace-card,
+.table-card,
+.tabs-card {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-card {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.workspace-primary-tabs {
+  display: flex;
+  gap: 10px;
+  padding: 0 22px 14px;
+}
+
+.workspace-panel {
+  min-height: 0;
+}
+
+.workspace-view {
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace-table-view,
+.workspace-analysis-view,
+.workspace-radiation-view {
+  display: grid;
+}
+
+.workspace-table-view {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.workspace-analysis-view {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
+.workspace-radiation-view {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
+.workspace-table-body {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.card-head-split {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+
+.result-table-scroll {
+  height: 100%;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 10px;
+  padding: 0 22px 14px;
+}
+
+.tab-button {
+  border: 1px solid rgba(13, 103, 111, 0.12);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background: rgba(13, 103, 111, 0.14);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.tabs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 22px 14px;
+}
+
+.tab-panel {
+  min-height: 0;
+  padding: 0 22px 22px;
+}
+
+.tab-panel-inner {
+  height: 100%;
+  min-height: 0;
+}
+
+.diagnostic-stack {
+  height: 100%;
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+}
+
+.diagnostic-section {
+  display: grid;
+  gap: 12px;
+}
+
+.diagnostic-section h4 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+
+.diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.drawer-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(19, 28, 27, 0.28);
+  pointer-events: auto;
+}
+
+.mode-drawer {
+  position: fixed;
+  width: min(760px, calc(100vw - 64px));
+  max-height: calc(100vh - 116px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  border: 1px solid rgba(13, 103, 111, 0.12);
+  border-radius: 24px;
+  background: rgba(250, 252, 249, 0.98);
+  box-shadow: 0 26px 60px rgba(24, 43, 38, 0.18);
+  transition: opacity 180ms ease;
+  pointer-events: auto;
+}
+
+.mode-drawer.closed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 14px;
+  padding: 20px 22px 12px;
+}
+
+.mode-drawer-head h3 {
+  margin: 0;
+}
+
+.mode-drawer-head p {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+}
+
+.drawer-tab-bar {
+  display: flex;
+  gap: 10px;
+  padding: 0 22px 14px;
+}
+
+.drawer-body {
+  min-height: 0;
+  padding: 0 22px 22px;
+}
+
+.drawer-scroll {
+  height: 100%;
+  overflow: auto;
+}
+
+.mode-plot-wrap,
+.potential-plot-wrap,
+.scan-plot-wrap {
+  height: 100%;
+}
+
+.react-warning-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.mode-selection-line {
+  color: var(--ink-soft);
+}
+
+.toolbar-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radiation-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 22px 14px;
+}
+
+.radiation-order-card {
+  min-height: auto;
+}
+
+.radiation-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 22px 14px;
+}
+
+.radiation-content-grid {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(280px, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.radiation-chart-card,
+.radiation-diagnostics-card {
+  min-height: 0;
+  display: grid;
+}
+
+.radiation-chart-card {
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 18px 18px 16px;
+}
+
+.radiation-diagnostics-card {
+  grid-column: 1 / -1;
+  padding: 18px;
+}
+
+.chart-area-fixed {
+  min-height: 0;
+  height: 100%;
+}
+
+.chart-area-fixed.small {
+  height: 320px;
+}
+
+.radiation-summary-grid {
+  margin-top: 12px;
+}
+
+.radiation-potential-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.section-head.compact {
+  padding-bottom: 0;
+}
+
+.empty-panel {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(13, 103, 111, 0.16);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.44);
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 24px;
+}
+
+.action-empty-panel {
+  gap: 14px;
+}
+
+.sidebar-tab-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sidebar-tab-bar .tab-button {
+  width: 100%;
+  text-align: center;
+}
+
+.metric-toggle-top {
+  width: fit-content;
+}
+
+.sidebar-panel {
+  min-height: 0;
+  height: 100%;
+}
+
+.metric-note-panel {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(13, 103, 111, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.metric-note-panel strong {
+  font-size: 0.94rem;
+}
+
+.metric-note-panel span,
+.editor-inline-note,
+.formula-normalized-note span,
+.formula-editor-section-head p,
+.help-subsection p {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.editor-card-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-inline-note {
+  margin-top: -4px;
+}
+
+.formula-preview-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.formula-normalized-note {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(13, 103, 111, 0.1);
+  border-radius: 14px;
+  background: rgba(244, 248, 245, 0.92);
+}
+
+.formula-normalized-note code {
+  overflow-wrap: anywhere;
+}
+
+.formula-current-expression {
+  padding: 12px 14px;
+  border: 1px solid rgba(13, 103, 111, 0.12);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.formula-current-expression code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.formula-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(19, 28, 27, 0.34);
+}
+
+.formula-editor-card {
+  position: fixed;
+  width: min(1080px, calc(100vw - 56px));
+  max-height: min(860px, calc(100vh - 56px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid rgba(13, 103, 111, 0.14);
+  border-radius: 24px;
+  background: rgba(250, 252, 249, 0.985);
+  box-shadow: 0 26px 60px rgba(24, 43, 38, 0.18);
+}
+
+.formula-editor-body {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  padding: 0 22px 22px;
+}
+
+.formula-editor-pane {
+  min-height: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.formula-editor-section {
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid rgba(13, 103, 111, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.formula-editor-section-head {
+  display: grid;
+  gap: 4px;
+}
+
+.formula-editor-section-head h4,
+.help-subsection h4 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.formula-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.window-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.window-drag-handle {
+  cursor: move;
+  user-select: none;
+}
+
+.window-drag-handle button {
+  cursor: pointer;
+}
+
+.formula-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.formula-template-button,
+.latex-example-button {
+  justify-content: center;
+}
+
+.formula-editor-textarea {
+  min-height: 220px;
+}
+
+.formula-editor-footer {
+  display: flex;
+  justify-content: end;
+  gap: 12px;
+  padding: 0 22px 22px;
+}
+
+.latex-example-list {
+  display: grid;
+  gap: 10px;
+}
+
+.latex-example-list.static {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.latex-example-button,
+.latex-example-card {
+  text-align: left;
+}
+
+.latex-example-button code,
+.latex-example-card code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.help-subsection {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+@media (max-width: 1180px) {
+  .formula-editor-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.parameter-editor-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.parameter-row-react {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(13, 103, 111, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.parameter-row-react-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.parameter-controls-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.parameter-controls-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.formula-grid-react {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+
+.help-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(19, 28, 27, 0.34);
+  z-index: 80;
+}
+
+.help-modal-card {
+  position: fixed;
+  width: min(720px, calc(100vw - 40px));
+  max-height: min(80vh, 720px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 22px;
+  background: rgba(252, 253, 250, 0.98);
+  box-shadow: 0 24px 60px rgba(22, 42, 36, 0.2);
+}
+
+.help-grid-scroll {
+  overflow: auto;
+  padding: 0 22px 22px;
+}
+
+@media (max-width: 1500px) {
+  .workspace-grid {
+    grid-template-columns: 420px minmax(0, 1fr);
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .radiation-controls-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .radiation-content-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(260px, 1fr) minmax(260px, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  body {
+    overflow: auto;
+  }
+
+  .react-shell {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .formula-grid-react,
+  .parameter-controls-grid,
+  .diagnostic-grid,
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .radiation-controls-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mode-drawer {
+    bottom: auto;
+    width: min(calc(100vw - 32px), 760px);
+    max-height: calc(100vh - 102px);
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar,
+  .workspace-grid {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .formula-grid-react,
+  .parameter-controls-grid,
+  .diagnostic-grid,
+  .summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .radiation-controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .radiation-status-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tab-bar,
+  .tabs-toolbar,
+  .mode-drawer-head,
+  .drawer-tab-bar,
+  .drawer-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+.react-fatal {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.react-fatal-card {
+  max-width: 520px;
+  background: #fffaf1;
+  border: 1px solid #d6c0a5;
+  border-radius: 18px;
+  padding: 28px 30px;
+  box-shadow: 0 20px 40px rgba(85, 61, 35, 0.12);
+}
+
+.react-fatal-card h2 {
+  margin: 0 0 12px;
+  font-size: 1.35rem;
+  color: #5a3921;
+}
+
+.react-fatal-card p {
+  margin: 0;
+  color: #7b6048;
+  line-height: 1.5;
+  word-break: break-word;
+}

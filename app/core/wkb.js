@@ -205,6 +205,47 @@
     return value;
   }
 
+  function complexFromReal(value, ctx) {
+    return new App.Numerics.ComplexDecimal(value, ctx.zero);
+  }
+
+  function complexFromImag(value, ctx) {
+    return new App.Numerics.ComplexDecimal(ctx.zero, value);
+  }
+
+  function complexPolynomialDegree(coeffs, ctx) {
+    for (let degree = coeffs.length - 1; degree >= 0; degree -= 1) {
+      const coeff = coeffs[degree];
+      if (coeff && coeff.abs(ctx).greaterThan(ctx.zero)) {
+        return degree;
+      }
+    }
+    return 0;
+  }
+
+  function evaluateComplexPolynomial(coeffs, z, ctx) {
+    const degree = complexPolynomialDegree(coeffs, ctx);
+    let value = complexZero(ctx);
+    for (let index = degree; index >= 0; index -= 1) {
+      value = value.mul(z).add(coeffs[index] || complexZero(ctx));
+    }
+    return value;
+  }
+
+  function evaluateComplexPolynomialWithDerivative(coeffs, z, ctx) {
+    const degree = complexPolynomialDegree(coeffs, ctx);
+    let value = coeffs[degree] || complexZero(ctx);
+    let derivative = complexZero(ctx);
+    for (let index = degree - 1; index >= 0; index -= 1) {
+      derivative = derivative.mul(z).add(value);
+      value = value.mul(z).add(coeffs[index] || complexZero(ctx));
+    }
+    return {
+      value,
+      derivative
+    };
+  }
+
   function monomialValue(group, fixedPowers, cache, ctx) {
     if (cache.has(group.key)) {
       return cache.get(group.key);
@@ -265,6 +306,150 @@
     };
   }
 
+  function orderPolynomialToComplexCoefficients(order, ctx) {
+    const coeffs = [];
+    for (let index = 0; index < order.coeffs.length; index += 1) {
+      const coeff = order.coeffs[index];
+      if (!coeff) {
+        continue;
+      }
+      coeffs[index] = order.kind === "imag"
+        ? complexFromImag(coeff, ctx)
+        : complexFromReal(coeff, ctx);
+    }
+    return coeffs;
+  }
+
+  function addComplexPolynomials(left, right, ctx) {
+    const length = Math.max(left.length, right.length);
+    const sum = [];
+    for (let index = 0; index < length; index += 1) {
+      const leftCoeff = left[index] || complexZero(ctx);
+      const rightCoeff = right[index] || complexZero(ctx);
+      const value = leftCoeff.add(rightCoeff);
+      if (value.abs(ctx).greaterThan(ctx.zero)) {
+        sum[index] = value;
+      }
+    }
+    return sum;
+  }
+
+  function buildCumulativePolynomials(prepared, derivatives, ctx) {
+    let cumulative = [complexFromReal(derivatives[0], ctx)];
+    return prepared.orders.map((order) => {
+      cumulative = addComplexPolynomials(cumulative, orderPolynomialToComplexCoefficients(order, ctx), ctx);
+      return {
+        order: order.order,
+        coeffs: cumulative.slice()
+      };
+    });
+  }
+
+  function eikonalGuess(derivatives, omegaSquared, ctx) {
+    const barrierRoot = derivatives[2].times(-2).sqrt();
+    if (barrierRoot.isZero()) {
+      throw new Error("The barrier curvature vanishes, so the scattering coefficient cannot be initialized.");
+    }
+    return new App.Numerics.ComplexDecimal(
+      ctx.zero,
+      omegaSquared.minus(derivatives[0]).div(barrierRoot)
+    );
+  }
+
+  function solveComplexPolynomialRoot(coeffs, target, initial, ctx) {
+    const targetComplex = complexFromReal(target, ctx);
+    const scale = App.Numerics.dmax(ctx, ctx.one, target.abs());
+    const residualTolerance = ctx.ten.pow(-Math.max(12, Math.floor(ctx.precision * 0.6))).times(scale);
+    const derivativeTolerance = ctx.ten.pow(-Math.max(12, Math.floor(ctx.precision / 2)));
+    const offset = App.Numerics.dmax(ctx, new ctx.D("0.05"), initial.abs(ctx).times(new ctx.D("0.05")));
+    const starts = [
+      initial,
+      initial.scale(new ctx.D("0.9")),
+      initial.scale(new ctx.D("1.1")),
+      initial.add(complexFromImag(offset, ctx)),
+      initial.sub(complexFromImag(offset, ctx)),
+      initial.add(complexFromReal(offset, ctx)),
+      initial.sub(complexFromReal(offset, ctx))
+    ];
+    let best = null;
+    for (const start of starts) {
+      let current = start;
+      let currentResidual = null;
+      for (let iteration = 0; iteration < 80; iteration += 1) {
+        const evaluated = evaluateComplexPolynomialWithDerivative(coeffs, current, ctx);
+        const residual = evaluated.value.sub(targetComplex);
+        const residualAbs = residual.abs(ctx);
+        if (!best || residualAbs.lessThan(best.residual)) {
+          best = {
+            root: current,
+            residual: residualAbs,
+            iterations: iteration + 1
+          };
+        }
+        if (residualAbs.lessThan(residualTolerance)) {
+          return {
+            root: current,
+            residual: residualAbs,
+            iterations: iteration + 1
+          };
+        }
+        const derivativeAbs = evaluated.derivative.abs(ctx);
+        if (!derivativeAbs.greaterThan(derivativeTolerance)) {
+          break;
+        }
+        let step = residual.div(evaluated.derivative);
+        let candidate = current.sub(step);
+        let candidateResidual = evaluateComplexPolynomial(coeffs, candidate, ctx).sub(targetComplex).abs(ctx);
+        if (candidateResidual.greaterThan(residualAbs)) {
+          let improved = false;
+          for (const factor of [new ctx.D("0.5"), new ctx.D("0.25"), new ctx.D("0.125"), new ctx.D("0.0625")]) {
+            const damped = current.sub(step.scale(factor));
+            const dampedResidual = evaluateComplexPolynomial(coeffs, damped, ctx).sub(targetComplex).abs(ctx);
+            if (dampedResidual.lessThan(candidateResidual)) {
+              candidate = damped;
+              candidateResidual = dampedResidual;
+              improved = true;
+            }
+            if (dampedResidual.lessThan(residualAbs)) {
+              break;
+            }
+          }
+          if (!improved && candidateResidual.greaterThan(residualAbs) && currentResidual && residualAbs.greaterThanOrEqualTo(currentResidual)) {
+            break;
+          }
+        }
+        current = candidate;
+        currentResidual = candidateResidual;
+      }
+    }
+    if (!best) {
+      throw new Error("The WKB scattering equation could not be initialized.");
+    }
+    return best;
+  }
+
+  function greybodyFromK(k, ctx) {
+    const exponent = complexFromImag(ctx.two.times(ctx.pi), ctx).mul(k);
+    const transmissionComplex = complexOne(ctx).div(complexOne(ctx).add(exponent.exp(ctx)));
+    const imagResidual = transmissionComplex.im.abs();
+    const tolerance = ctx.ten.pow(-Math.max(8, Math.floor(ctx.precision / 3)));
+    let transmission = transmissionComplex.re;
+    if (imagResidual.lessThan(tolerance)) {
+      transmission = transmissionComplex.re;
+    }
+    if (transmission.isNegative() && transmission.abs().lessThan(tolerance)) {
+      transmission = ctx.zero;
+    }
+    if (transmission.greaterThan(ctx.one) && transmission.minus(ctx.one).abs().lessThan(tolerance)) {
+      transmission = ctx.one;
+    }
+    return {
+      value: transmission,
+      complexValue: transmissionComplex,
+      imagResidual
+    };
+  }
+
   function prepareOrderPolynomials(derivatives, maxOrder, ctx) {
     const data = prepareData(ctx, maxOrder);
     const fixedPowers = buildFixedVariablePowers(derivatives, data.sharedMaxPowers, ctx);
@@ -279,6 +464,81 @@
       maxOrder,
       orders,
       maxKDegree
+    };
+  }
+
+  function createTransmissionEvaluator(derivatives, maxOrder, ctx) {
+    const prepared = prepareOrderPolynomials(derivatives, maxOrder, ctx);
+    const cumulativePolynomials = buildCumulativePolynomials(prepared, derivatives, ctx);
+    return function evaluateTransmission(omega) {
+      const omegaSquared = omega.times(omega);
+      const initial = eikonalGuess(derivatives, omegaSquared, ctx);
+      const orders = cumulativePolynomials.map((item) => {
+        const solved = solveComplexPolynomialRoot(item.coeffs, omegaSquared, initial, ctx);
+        const greybody = greybodyFromK(solved.root, ctx);
+        return {
+          order: item.order,
+          k: solved.root,
+          residual: solved.residual,
+          iterations: solved.iterations,
+          transmission: greybody.value,
+          transmissionComplex: greybody.complexValue,
+          transmissionImagResidual: greybody.imagResidual
+        };
+      });
+      return {
+        omegaSquared,
+        initialK: initial,
+        orders,
+        main: orders[orders.length - 1]
+      };
+    };
+  }
+
+  function serializeComplex(value) {
+    return {
+      re: value.re.toString(),
+      im: value.im.toString()
+    };
+  }
+
+  function deserializeComplex(data, ctx) {
+    return new App.Numerics.ComplexDecimal(new ctx.D(data.re), new ctx.D(data.im));
+  }
+
+  function prepareTransmissionKernel(derivatives, maxOrder, ctx) {
+    const prepared = prepareOrderPolynomials(derivatives, maxOrder, ctx);
+    const cumulativePolynomials = buildCumulativePolynomials(prepared, derivatives, ctx);
+    const main = cumulativePolynomials[cumulativePolynomials.length - 1];
+    return {
+      maxOrder,
+      v0: derivatives[0].toString(),
+      v2: derivatives[2].toString(),
+      coeffs: main.coeffs.map((coeff) => (coeff ? serializeComplex(coeff) : null))
+    };
+  }
+
+  function evaluateTransmissionKernel(kernel, omega, ctx) {
+    const omegaSquared = omega.times(omega);
+    const v0 = new ctx.D(kernel.v0);
+    const barrierRoot = new ctx.D(kernel.v2).times(-2).sqrt();
+    const coeffs = kernel.coeffs.map((coeff) => (coeff ? deserializeComplex(coeff, ctx) : null));
+    const initial = new App.Numerics.ComplexDecimal(
+      ctx.zero,
+      omegaSquared.minus(v0).div(barrierRoot)
+    );
+    const solved = solveComplexPolynomialRoot(coeffs, omegaSquared, initial, ctx);
+    const greybody = greybodyFromK(solved.root, ctx);
+    return {
+      omegaSquared,
+      initialK: initial,
+      order: kernel.maxOrder,
+      k: solved.root,
+      residual: solved.residual,
+      iterations: solved.iterations,
+      transmission: greybody.value,
+      transmissionComplex: greybody.complexValue,
+      transmissionImagResidual: greybody.imagResidual
     };
   }
 
@@ -389,7 +649,7 @@
       for (let row = 1; row <= denominatorDegree; row += 1) {
         const rowValues = [];
         for (let column = 1; column <= denominatorDegree; column += 1) {
-          rowValues.push(coefficients[numeratorDegree + row - column]);
+          rowValues.push(coefficients[numeratorDegree + row - column] || complexZero(ctx));
         }
         matrix.push(rowValues);
         rhs.push(coefficients[numeratorDegree + row].neg());
@@ -435,16 +695,17 @@
       return [];
     }
     const coefficients = buildSeriesCoefficients(derivatives, contributions, ctx);
-    const lower = Math.floor(maxOrder / 2);
-    const upper = Math.ceil(maxOrder / 2);
-    const pairs = lower === upper
-      ? [[lower, upper]]
-      : [[lower, upper], [upper, lower]];
-    return pairs
-      .map(([numeratorDegree, denominatorDegree]) =>
-        padeApproximation(coefficients, numeratorDegree, denominatorDegree, ctx)
-      )
-      .filter(Boolean);
+    const approximants = [];
+    for (let totalDegree = 2; totalDegree <= maxOrder; totalDegree += 1) {
+      for (let numeratorDegree = totalDegree; numeratorDegree >= 1; numeratorDegree -= 1) {
+        const denominatorDegree = totalDegree - numeratorDegree;
+        const approximant = padeApproximation(coefficients, numeratorDegree, denominatorDegree, ctx);
+        if (approximant) {
+          approximants.push(approximant);
+        }
+      }
+    }
+    return approximants;
   }
 
   function computeSeries(n, derivatives, maxOrder, ctx) {
@@ -461,6 +722,9 @@
     buildVariablePowers,
     contribution,
     createSeriesEvaluator,
+    createTransmissionEvaluator,
+    prepareTransmissionKernel,
+    evaluateTransmissionKernel,
     computeSeries
   };
 })();
