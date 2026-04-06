@@ -1,3 +1,5 @@
+﻿"use strict";
+
 (function () {
   const mountNode = document.getElementById("root");
   const showFatal = message => {
@@ -122,7 +124,7 @@
       href: "https://doi.org/10.1103/RevModPhys.83.793",
       meta: "Rev. Mod. Phys. 83, 793 (2011)"
     }, {
-      title: "Padé summation of higher-order WKB terms",
+      title: "PadÃ© summation of higher-order WKB terms",
       href: "https://doi.org/10.1103/PhysRevD.100.124006",
       meta: "Matyjasek & Telecka, Phys. Rev. D 100, 124006 (2019)"
     }, {
@@ -155,6 +157,7 @@
       if (!items.includes(value)) items.push(value);
     };
     const clampInt = (value, min) => !Number.isFinite(value) ? min : Math.max(min, Math.floor(value));
+    const ellFloorForPerturbation = perturbationType => perturbationType === "electromagnetic" ? 1 : 0;
     const hasScanRange = specs => Object.values(specs || {}).some(spec => spec.mode === "range");
     const csvEscape = value => {
       const text = value === null || value === undefined ? "" : String(value);
@@ -614,7 +617,7 @@
         }])));
       }, [metric.names.join("|")]);
       useEffect(() => {
-        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const ellFloor = ellFloorForPerturbation(config.perturbationType);
         setRadiationConfig(current => ({
           ...current,
           greybodyEllMin: Math.max(ellFloor, clampInt(Number(current.greybodyEllMin != null ? current.greybodyEllMin : current.greybodyEll), ellFloor)),
@@ -630,7 +633,7 @@
         disposeWorkerCollection(radiationPoolRef.current);
       }, []);
       useEffect(() => {
-        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const ellFloor = ellFloorForPerturbation(config.perturbationType);
         setGreybodyCompareSettings(current => {
           const orderMin = Math.max(1, Math.min(maxAvailableWkbOrder, clampInt(Number(current.orderMin), 1)));
           const orderMax = Math.max(orderMin, Math.min(maxAvailableWkbOrder, clampInt(Number(current.orderMax), orderMin)));
@@ -969,7 +972,7 @@
           ...current,
           ...patch
         };
-        next.ell = clampInt(Number(next.ell), next.perturbationType === "electromagnetic" ? 1 : 0);
+        next.ell = clampInt(Number(next.ell), ellFloorForPerturbation(next.perturbationType));
         next.overtoneMax = clampInt(Number(next.overtoneMax), 0);
         if (next.sameMetric) next.gExpression = next.fExpression;
         return next;
@@ -1031,7 +1034,7 @@
           fExpression: config.fExpression.trim(),
           gExpression: (config.sameMetric ? config.fExpression : config.gExpression).trim(),
           perturbationType: config.perturbationType,
-          ell: clampInt(Number(config.ell), config.perturbationType === "electromagnetic" ? 1 : 0),
+          ell: clampInt(Number(config.ell), ellFloorForPerturbation(config.perturbationType)),
           overtoneMax: clampInt(Number(config.overtoneMax), 0),
           mainOrder: Number(config.mainOrder),
           precision: Number(config.precision),
@@ -1046,7 +1049,7 @@
       };
       const collectGreybodyConfig = () => {
         const runConfig = collectConfig();
-        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const ellFloor = ellFloorForPerturbation(config.perturbationType);
         const ellMin = clampInt(Number(radiationConfig.greybodyEllMin != null ? radiationConfig.greybodyEllMin : radiationConfig.greybodyEll), ellFloor);
         const ellMax = Math.max(ellMin, clampInt(Number(radiationConfig.greybodyEllMax != null ? radiationConfig.greybodyEllMax : radiationConfig.greybodyEll), ellFloor));
         return {
@@ -1067,7 +1070,7 @@
         if (hasScanRange(parameterSpecs)) {
           throw new Error("Greybody order comparison currently requires fixed parameter values. Set every metric parameter to a single value.");
         }
-        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const ellFloor = ellFloorForPerturbation(config.perturbationType);
         const ellValue = Number(greybodyCompareSettings.ell);
         const orderMinValue = Number(greybodyCompareSettings.orderMin);
         const orderMaxValue = Number(greybodyCompareSettings.orderMax);
@@ -1106,7 +1109,7 @@
         if (hasScanRange(parameterSpecs)) {
           throw new Error("Hawking radiation currently requires fixed parameter values. Set every metric parameter to a single value.");
         }
-        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const ellFloor = ellFloorForPerturbation(config.perturbationType);
         return {
           runConfig,
           radiation: {
@@ -1151,7 +1154,7 @@
         setAnalysisCurveSelection(current => current.includes(caseIndex) ? current.filter(item => item !== caseIndex) : current.concat(caseIndex).sort((a, b) => a - b));
       };
       const openGreybodyCompareWindow = () => {
-        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const ellFloor = ellFloorForPerturbation(config.perturbationType);
         const defaultEll = Math.max(ellFloor, clampInt(Number(radiationConfig.greybodyEllMin != null ? radiationConfig.greybodyEllMin : radiationConfig.greybodyEll), ellFloor));
         const suggestedMax = Math.max(1, Math.min(maxAvailableWkbOrder, clampInt(Number(config.mainOrder), 1)));
         setGreybodyCompareSettings(current => {
@@ -2738,13 +2741,15 @@
         value: "scalar"
       }, "Scalar field"), /*#__PURE__*/React.createElement("option", {
         value: "electromagnetic"
-      }, "Electromagnetic field"))), /*#__PURE__*/React.createElement("label", {
+      }, "Electromagnetic field"), /*#__PURE__*/React.createElement("option", {
+        value: "dirac"
+      }, "Dirac field (V+)"))), /*#__PURE__*/React.createElement("label", {
         className: "field"
       }, /*#__PURE__*/React.createElement("span", {
         className: "field-label"
       }, "ell"), /*#__PURE__*/React.createElement("input", {
         type: "number",
-        min: config.perturbationType === "electromagnetic" ? 1 : 0,
+        min: ellFloorForPerturbation(config.perturbationType),
         step: "1",
         value: config.ell,
         onChange: event => updateConfig({
@@ -2989,7 +2994,7 @@
         className: "field-label"
       }, "ell min"), /*#__PURE__*/React.createElement("input", {
         type: "number",
-        min: config.perturbationType === "electromagnetic" ? 1 : 0,
+        min: ellFloorForPerturbation(config.perturbationType),
         step: "1",
         value: radiationConfig.greybodyEllMin != null ? radiationConfig.greybodyEllMin : radiationConfig.greybodyEll,
         onChange: event => setRadiationConfig(current => ({
@@ -3002,7 +3007,7 @@
         className: "field-label"
       }, "ell max"), /*#__PURE__*/React.createElement("input", {
         type: "number",
-        min: config.perturbationType === "electromagnetic" ? 1 : 0,
+        min: ellFloorForPerturbation(config.perturbationType),
         step: "1",
         value: radiationConfig.greybodyEllMax != null ? radiationConfig.greybodyEllMax : radiationConfig.greybodyEll,
         onChange: event => setRadiationConfig(current => ({
@@ -3081,7 +3086,7 @@
         className: "field-label"
       }, "ell cutoff"), /*#__PURE__*/React.createElement("input", {
         type: "number",
-        min: config.perturbationType === "electromagnetic" ? 1 : 0,
+        min: ellFloorForPerturbation(config.perturbationType),
         step: "1",
         value: radiationConfig.ellCutoff,
         onChange: event => setRadiationConfig(current => ({
@@ -3494,7 +3499,7 @@
         className: "field-label"
       }, "ell"), /*#__PURE__*/React.createElement("input", {
         type: "number",
-        min: config.perturbationType === "electromagnetic" ? 1 : 0,
+        min: ellFloorForPerturbation(config.perturbationType),
         step: "1",
         value: greybodyCompareSettings.ell,
         onChange: event => setGreybodyCompareSettings(current => ({

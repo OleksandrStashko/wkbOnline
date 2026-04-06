@@ -72,11 +72,20 @@
   function createPotentialModel(metric, perturbationType, ell, ctx) {
     const l = new ctx.D(ell);
     const angular = l.times(l.plus(ctx.one));
+    const diracKappa = l.plus(ctx.one);
+    const diracKappaSquared = diracKappa.times(diracKappa);
 
     function valueAt(r) {
       const fr = metric.f(r);
       if (perturbationType === "electromagnetic") {
         return fr.times(angular).div(r.times(r));
+      }
+      if (perturbationType === "dirac") {
+        const sr = metric.s(r);
+        const sqrtFr = fr.sqrt();
+        const fDual = metric.fDual(r);
+        const superpotentialDerivative = fDual.d.div(ctx.two.times(r).times(sqrtFr)).minus(sqrtFr.div(r.times(r)));
+        return fr.times(diracKappaSquared).div(r.times(r)).plus(sr.times(superpotentialDerivative).times(diracKappa));
       }
       const fDual = metric.fDual(r);
       const gDual = metric.gDual(r);
