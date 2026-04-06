@@ -7,13 +7,13 @@
   try {
     const Core = window.QNMApp;
     const { useEffect, useMemo, useRef, useState } = React;
-const workerVersion = "20260403x";
+    const workerVersion = "20260406a";
     const defaultSpec = { mode: "value", value: "1", start: "0", end: "1", count: 5 };
     const defaultRadiation = { omegaMin: "0.1", omegaMax: "1", omegaPoints: 121, greybodyEll: 2, greybodyEllMin: 2, greybodyEllMax: 2, ellCutoff: 6 };
     const presets = {
-      custom: { label: "Custom", values: { fExpression: "1 - 2*M/r", gExpression: "1 - 2*M/r", sameMetric: true, perturbationType: "scalar", ell: 2, overtoneMax: 2, mainOrder: 6, showAllOrders: true, precision: 70, spectralNodes: 64, plotSamples: 401, rMin: "0.001", rMax: "30", horizonSamples: 480, peakSamples: 900, parallelRadiation: false, parallelRadiationWorkers: 4, parameterSpecs: { M: { ...defaultSpec } } } },
-      schwarzschild: { label: "Schwarzschild", values: { fExpression: "1 - 2*M/r", gExpression: "1 - 2*M/r", sameMetric: true, perturbationType: "scalar", ell: 2, overtoneMax: 2, mainOrder: 6, showAllOrders: true, precision: 70, spectralNodes: 64, plotSamples: 401, rMin: "0.001", rMax: "30", horizonSamples: 480, peakSamples: 900, parallelRadiation: false, parallelRadiationWorkers: 4, parameterSpecs: { M: { ...defaultSpec } } } },
-      reissnerNordstrom: { label: "Reissner-Nordstrom", values: { fExpression: "1 - 2*M/r + Q^2/r^2", gExpression: "1 - 2*M/r + Q^2/r^2", sameMetric: true, perturbationType: "scalar", ell: 2, overtoneMax: 2, mainOrder: 6, showAllOrders: true, precision: 76, spectralNodes: 72, plotSamples: 401, rMin: "0.001", rMax: "35", horizonSamples: 560, peakSamples: 980, parallelRadiation: false, parallelRadiationWorkers: 4, parameterSpecs: { M: { ...defaultSpec }, Q: { mode: "value", value: "0.4", start: "0", end: "1", count: 5 } } } }
+      custom: { label: "Custom", values: { fExpression: "1 - 2*M/r", gExpression: "1 - 2*M/r", sameMetric: true, perturbationType: "scalar", ell: 2, overtoneMax: 2, mainOrder: 6, precision: 70, spectralNodes: 64, plotSamples: 401, rMin: "0.001", rMax: "30", horizonSamples: 480, peakSamples: 900, parallelRadiation: false, parallelRadiationWorkers: 4, parameterSpecs: { M: { ...defaultSpec } } } },
+      schwarzschild: { label: "Schwarzschild", values: { fExpression: "1 - 2*M/r", gExpression: "1 - 2*M/r", sameMetric: true, perturbationType: "scalar", ell: 2, overtoneMax: 2, mainOrder: 6, precision: 70, spectralNodes: 64, plotSamples: 401, rMin: "0.001", rMax: "30", horizonSamples: 480, peakSamples: 900, parallelRadiation: false, parallelRadiationWorkers: 4, parameterSpecs: { M: { ...defaultSpec } } } },
+      reissnerNordstrom: { label: "Reissner-Nordstrom", values: { fExpression: "1 - 2*M/r + Q^2/r^2", gExpression: "1 - 2*M/r + Q^2/r^2", sameMetric: true, perturbationType: "scalar", ell: 2, overtoneMax: 2, mainOrder: 6, precision: 76, spectralNodes: 72, plotSamples: 401, rMin: "0.001", rMax: "35", horizonSamples: 560, peakSamples: 980, parallelRadiation: false, parallelRadiationWorkers: 4, parameterSpecs: { M: { ...defaultSpec }, Q: { mode: "value", value: "0.4", start: "0", end: "1", count: 5 } } } }
     };
 const helpItems = [
       ["sqrt(x)", "square root"],
@@ -61,6 +61,9 @@ const referenceCredits = [
       if (magnitude >= 1e4 || magnitude < 1e-4) return value.toExponential(5);
       return value.toFixed(8).replace(/\.?0+$/, "");
     };
+    const chartPalette = ["#0e6670", "#c08b2c", "#a33f2f", "#297a4d", "#6a4fb3", "#9a5d16", "#1d5f9b", "#a34774"];
+    const chartColor = (index) => chartPalette[index % chartPalette.length];
+    const analysisCurveWindowThreshold = 8;
     const formatRelative = (text) => text === null || text === undefined || text === "" ? "--" : compactNumber(text);
     const formatComplexInline = (value) => {
       if (!value) return "--";
@@ -168,6 +171,8 @@ const chartMount = (renderer, deps) => {
     const ScanChart = ({ data }) => <div ref={chartMount((node) => Core.Chart.renderModeScanChart(node, data), [data])} className="scan-plot-wrap" />;
     const OrderChart = ({ data }) => <div ref={chartMount((node) => Core.Chart.renderOrderTrendChart(node, data), [data])} className="mode-plot-wrap" />;
     const GreybodyChart = ({ data }) => <div ref={chartMount((node) => Core.Chart.renderGreybodyChart(node, data), [data])} className="scan-plot-wrap" />;
+    const GreybodyOrderSweepChart = ({ data }) => <div ref={chartMount((node) => Core.Chart.renderGreybodyOrderSweepChart(node, data), [data])} className="scan-plot-wrap" />;
+    const GreybodyOrderDifferenceChart = ({ data }) => <div ref={chartMount((node) => Core.Chart.renderGreybodyOrderDifferenceChart(node, data), [data])} className="scan-plot-wrap" />;
     const HawkingSpectrumChart = ({ data }) => <div ref={chartMount((node) => Core.Chart.renderHawkingSpectrumChart(node, data), [data])} className="scan-plot-wrap" />;
     const pickPade = (items) => !items || !items.length ? null : items.slice().sort((a, b) => {
       const da = Number(a.relativeToMain);
@@ -178,11 +183,45 @@ const chartMount = (renderer, deps) => {
       if (ga !== gb) return ga - gb;
       return (b.numeratorDegree + b.denominatorDegree) - (a.numeratorDegree + a.denominatorDegree);
     })[0];
-    const MetricInputCard = ({ title, description, disabled, preview, onOpenEditor, editorDisabled }) => <div className={`editor-card${disabled ? " mirrored-editor" : ""}`}><div className="editor-card-head"><div><h4>{title}</h4></div><div className="editor-card-tools"><button type="button" className="ghost-button compact-button" disabled={editorDisabled} onClick={onOpenEditor}>Equation Editor</button></div></div><div className="preview-label">Preview</div><FormulaPreview preview={preview} /></div>;
+    const windowFrameConfig = {
+      mode: { width: 760, height: 780, top: 84 },
+      editor: { width: 1040, height: 820, top: 56 },
+      analysisCurveManager: { width: 430, height: 720, top: 88 },
+      greybodyCompare: { width: 980, height: 760, top: 52 },
+      help: { width: 720, height: 720, top: 72 },
+      references: { width: 760, height: 760, top: 72 }
+    };
+    const getViewportSize = () => {
+      if (typeof window === "undefined") {
+        return { width: 1400, height: 920 };
+      }
+      return { width: window.innerWidth, height: window.innerHeight };
+    };
+    const clampWindowPosition = (key, position) => {
+      const frame = windowFrameConfig[key] || windowFrameConfig.mode;
+      const viewport = getViewportSize();
+      const width = Math.min(frame.width, viewport.width - 24);
+      const height = Math.min(frame.height, viewport.height - 24);
+      return {
+        left: Math.min(Math.max(12, position.left), Math.max(12, viewport.width - width - 12)),
+        top: Math.min(Math.max(12, position.top), Math.max(12, viewport.height - height - 12))
+      };
+    };
+    const centeredWindowPosition = (key) => {
+      const frame = windowFrameConfig[key] || windowFrameConfig.mode;
+      const viewport = getViewportSize();
+      return clampWindowPosition(key, {
+        left: (viewport.width - Math.min(frame.width, viewport.width - 24)) / 2,
+        top: frame.top
+      });
+    };
+    const MetricInputCard = ({ title, description, disabled, preview, onOpenEditor, editorDisabled, primary = false }) => <div className={`editor-card${disabled ? " mirrored-editor" : ""}${primary ? " editor-card-primary" : ""}`}><div className="editor-card-head"><div><h4>{title}</h4>{description && <p>{description}</p>}</div><div className="editor-card-tools"><button type="button" className="ghost-button compact-button" disabled={editorDisabled} onClick={onOpenEditor}>{primary ? "Edit Formula" : "Equation Editor"}</button></div></div><div className="preview-label">Preview</div><FormulaPreview preview={preview} /></div>;
+    const DerivedMetricCard = ({ preview, onUnlock }) => <div className="derived-metric-card"><div className="derived-metric-head"><div className="derived-metric-copy"><h4>g(r)</h4><span className="editor-inline-note">Mirroring f(r) until you unlock a separate expression.</span></div><div className="derived-metric-actions"><button type="button" className="ghost-button compact-button" onClick={onUnlock}>Unlock g(r)</button></div></div><div className="derived-metric-preview"><FormulaPreview preview={preview} /></div></div>;
     const FormulaEditorModal = ({ open, fieldLabel, draft, preview, inputRef, onDraftChange, onOpenHelp, onApply, onClose, windowStyle, onMouseDownHeader }) => !open ? null : <div className="formula-editor-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="formula-editor-card" style={windowStyle} onClick={(event) => event.stopPropagation()}><div className="mode-drawer-head window-drag-handle" onMouseDown={onMouseDownHeader}><div><h3>Equation Editor</h3></div><div className="window-actions"><button type="button" className="ghost-button compact-button" onClick={(event) => { event.stopPropagation(); onOpenHelp(); }}>Help</button><button type="button" className="ghost-button compact-button" onClick={(event) => { event.stopPropagation(); onClose(); }}>Close</button></div></div><div className="formula-editor-body"><div className="formula-editor-pane"><div className="formula-editor-section"><div className="formula-editor-section-head"><h4>Formula</h4></div><textarea ref={inputRef} className="formula-input formula-editor-textarea" rows="9" spellCheck="false" value={draft} onChange={(event) => onDraftChange(event.target.value)} /></div></div><div className="formula-editor-pane"><div className="formula-editor-section"><div className="formula-editor-section-head"><h4>Rendered preview</h4></div><FormulaPreview preview={preview} /></div></div></div><div className="formula-editor-footer"><button type="button" className="ghost-button" onClick={onClose}>Cancel</button><button type="button" className="primary-button" disabled={preview.invalid} onClick={onApply}>Insert Formula</button></div></div></div>;
 
     function AppRoot() {
       const initial = presets.schwarzschild.values;
+      const maxAvailableWkbOrder = (Core.WKBData && Core.WKBData.maxOrder) || 16;
       const [config, setConfig] = useState({ presetKey: "schwarzschild", ...initial });
       const [parameterSpecs, setParameterSpecs] = useState(initial.parameterSpecs);
       const [status, setStatus] = useState(window.location.protocol === "file:" ? "Opened from a local file; the worker will use the compatibility bootstrap." : "Idle");
@@ -199,6 +238,16 @@ const chartMount = (renderer, deps) => {
       const [greybodyProgress, setGreybodyProgress] = useState({ completed: 0, total: 1 });
       const [greybodyError, setGreybodyError] = useState("");
       const [greybodyResult, setGreybodyResult] = useState(null);
+      const [greybodyCompareOpen, setGreybodyCompareOpen] = useState(false);
+      const [greybodyCompareStatus, setGreybodyCompareStatus] = useState("Idle");
+      const [greybodyCompareProgress, setGreybodyCompareProgress] = useState({ completed: 0, total: 1 });
+      const [greybodyCompareError, setGreybodyCompareError] = useState("");
+      const [greybodyCompareResult, setGreybodyCompareResult] = useState(null);
+      const [greybodyCompareSettings, setGreybodyCompareSettings] = useState({
+        ell: defaultRadiation.greybodyEll,
+        orderMin: Math.max(1, Number(initial.mainOrder) - 2),
+        orderMax: Number(initial.mainOrder)
+      });
       const [hawkingStatus, setHawkingStatus] = useState("Idle");
       const [hawkingProgress, setHawkingProgress] = useState({ completed: 0, total: 1 });
       const [hawkingError, setHawkingError] = useState("");
@@ -210,6 +259,9 @@ const chartMount = (renderer, deps) => {
       const [radiationTab, setRadiationTab] = useState("greybody");
       const [drawerTab, setDrawerTab] = useState("orders");
       const [modeSource, setModeSource] = useState("wkb");
+      const [analysisCurveManagerOpen, setAnalysisCurveManagerOpen] = useState(false);
+      const [analysisCurveSelection, setAnalysisCurveSelection] = useState([]);
+      const [analysisCurveSliderPosition, setAnalysisCurveSliderPosition] = useState(0);
       const [helpOpen, setHelpOpen] = useState(false);
       const [referencesOpen, setReferencesOpen] = useState(false);
       const [sidebarTab, setSidebarTab] = useState("metric-definition");
@@ -217,17 +269,19 @@ const chartMount = (renderer, deps) => {
       const workerRef = useRef(null);
       const analysisWorkerRef = useRef(null);
       const radiationWorkerRef = useRef(null);
+      const greybodyCompareWorkerRef = useRef(null);
       const radiationPoolRef = useRef([]);
       const editorInputRef = useRef(null);
       const pendingCaretRef = useRef(null);
       const dragRef = useRef(null);
       const defaultWindowPositions = () => {
-        const width = typeof window === "undefined" ? 1400 : window.innerWidth;
         return {
-          mode: { top: 92, left: Math.max(24, (width - Math.min(760, width - 64)) / 2) },
-          editor: { top: 72, left: Math.max(28, (width - Math.min(1080, width - 56)) / 2) },
-          help: { top: 96, left: Math.max(20, (width - Math.min(720, width - 40)) / 2) },
-          references: { top: 88, left: Math.max(24, (width - Math.min(760, width - 48)) / 2) }
+          mode: centeredWindowPosition("mode"),
+          editor: centeredWindowPosition("editor"),
+          analysisCurveManager: centeredWindowPosition("analysisCurveManager"),
+          greybodyCompare: centeredWindowPosition("greybodyCompare"),
+          help: centeredWindowPosition("help"),
+          references: centeredWindowPosition("references")
         };
       };
       const [windowPositions, setWindowPositions] = useState(defaultWindowPositions);
@@ -263,8 +317,22 @@ const chartMount = (renderer, deps) => {
         disposeWorker(workerRef.current);
         disposeWorker(analysisWorkerRef.current);
         disposeWorker(radiationWorkerRef.current);
+        disposeWorker(greybodyCompareWorkerRef.current);
         disposeWorkerCollection(radiationPoolRef.current);
       }, []);
+      useEffect(() => {
+        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        setGreybodyCompareSettings((current) => {
+          const orderMin = Math.max(1, Math.min(maxAvailableWkbOrder, clampInt(Number(current.orderMin), 1)));
+          const orderMax = Math.max(orderMin, Math.min(maxAvailableWkbOrder, clampInt(Number(current.orderMax), orderMin)));
+          return {
+            ...current,
+            ell: Math.max(ellFloor, clampInt(Number(current.ell), ellFloor)),
+            orderMin,
+            orderMax
+          };
+        });
+      }, [config.perturbationType, maxAvailableWkbOrder]);
       useEffect(() => {
         if (!formulaEditor.open || !editorInputRef.current) return;
         editorInputRef.current.focus();
@@ -288,20 +356,25 @@ const chartMount = (renderer, deps) => {
           if (!drag) return;
           setWindowPositions((current) => ({
             ...current,
-            [drag.key]: {
-              left: Math.max(12, event.clientX - drag.offsetX),
-              top: Math.max(12, event.clientY - drag.offsetY)
-            }
+            [drag.key]: clampWindowPosition(drag.key, {
+              left: event.clientX - drag.offsetX,
+              top: event.clientY - drag.offsetY
+            })
           }));
         };
         const onUp = () => {
           dragRef.current = null;
         };
+        const onResize = () => {
+          setWindowPositions((current) => Object.fromEntries(Object.entries(current).map(([key, position]) => [key, clampWindowPosition(key, position)])));
+        };
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
+        window.addEventListener("resize", onResize);
         return () => {
           window.removeEventListener("mousemove", onMove);
           window.removeEventListener("mouseup", onUp);
+          window.removeEventListener("resize", onResize);
         };
       }, []);
       const flatRows = useMemo(() => !displayedQnmResult ? [] : displayedQnmResult.cases.flatMap((caseData, caseIndex) => caseData.overtones.map((overtone, overtoneIndex) => ({ caseData, caseIndex, overtone, overtoneIndex }))), [displayedQnmResult]);
@@ -332,13 +405,82 @@ const chartMount = (renderer, deps) => {
         re: selectedRow.caseData.orders.map((order) => Number(selectedRow.overtone.orders[order].re)),
         im: selectedRow.caseData.orders.map((order) => Number(selectedRow.overtone.orders[order].im))
       }, [selectedRow]);
-const analysisPlotData = useMemo(() => !displayedAnalysisResult ? null : {
-  sameMetric: config.sameMetric,
-  cases: displayedAnalysisResult.cases.map((caseData) => ({
-    label: Object.entries(caseData.params || {}).map(([name, value]) => `${name}=${compactNumber(value)}`).join(", ") || "default parameters",
-    plot: caseData.plot
-  }))
-}, [displayedAnalysisResult, config.sameMetric]);
+      const analysisCases = useMemo(() => !displayedAnalysisResult ? [] : displayedAnalysisResult.cases.map((caseData, caseIndex) => ({
+        caseIndex,
+        label: Object.entries(caseData.params || {}).map(([name, value]) => `${name}=${compactNumber(value)}`).join(", ") || "default parameters",
+        params: caseData.params || {},
+        plot: caseData.plot
+      })), [displayedAnalysisResult]);
+      const analysisParameterNames = useMemo(() => !analysisCases.length ? [] : Array.from(new Set(analysisCases.flatMap((item) => Object.keys(item.params || {})))), [analysisCases]);
+      const analysisVaryingParameters = useMemo(() => !analysisCases.length ? [] : analysisParameterNames.filter((name) => analysisCases.some((item) => item.params[name] !== analysisCases[0].params[name])), [analysisCases, analysisParameterNames.join("|")]);
+      const analysisCurveControlAvailable = analysisCases.length > 1;
+      const analysisCurveManagerNeeded = analysisCases.length > analysisCurveWindowThreshold;
+      const analysisSliderData = useMemo(() => {
+        if (!analysisCases.length || analysisVaryingParameters.length !== 1) return null;
+        const parameterName = analysisVaryingParameters[0];
+        const entries = analysisCases.map((item) => ({
+          caseIndex: item.caseIndex,
+          label: item.label,
+          value: Number(item.params[parameterName])
+        })).filter((item) => Number.isFinite(item.value)).sort((a, b) => a.value - b.value);
+        return entries.length > 1 ? { parameterName, entries } : null;
+      }, [analysisCases, analysisVaryingParameters.join("|")]);
+      const analysisSliderEntry = useMemo(() => !analysisSliderData || !analysisSliderData.entries.length ? null : analysisSliderData.entries[Math.max(0, Math.min(analysisCurveSliderPosition, analysisSliderData.entries.length - 1))], [analysisSliderData, analysisCurveSliderPosition]);
+      const analysisSliderCaseIndex = analysisSliderEntry ? analysisSliderEntry.caseIndex : null;
+      const analysisCurveEntries = useMemo(() => {
+        if (!analysisCases.length) return [];
+        if (!analysisSliderData) return analysisCases;
+        const order = new Map(analysisSliderData.entries.map((item, index) => [item.caseIndex, index]));
+        return analysisCases.slice().sort((a, b) => (order.get(a.caseIndex) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.caseIndex) ?? Number.MAX_SAFE_INTEGER));
+      }, [analysisCases, analysisSliderData]);
+      const visibleAnalysisCaseIndices = useMemo(() => {
+        if (!analysisCases.length) return [];
+        const visible = new Set(analysisCurveSelection.filter((index) => analysisCases.some((item) => item.caseIndex === index)));
+        if (analysisSliderCaseIndex !== null && analysisSliderCaseIndex !== undefined) {
+          visible.add(analysisSliderCaseIndex);
+        }
+        if (!visible.size) {
+          if (analysisCurveManagerNeeded) {
+            visible.add(analysisCases[0].caseIndex);
+          } else {
+            analysisCases.forEach((item) => visible.add(item.caseIndex));
+          }
+        }
+        return Array.from(visible).sort((a, b) => a - b);
+      }, [analysisCases, analysisCurveManagerNeeded, analysisCurveSelection, analysisSliderCaseIndex]);
+      const visibleAnalysisCaseSet = useMemo(() => new Set(visibleAnalysisCaseIndices), [visibleAnalysisCaseIndices]);
+      const pinnedAnalysisCaseSet = useMemo(() => new Set(analysisCurveSelection), [analysisCurveSelection]);
+      const visibleAnalysisCases = useMemo(() => analysisCases.filter((item) => visibleAnalysisCaseSet.has(item.caseIndex)), [analysisCases, visibleAnalysisCaseSet]);
+      const analysisPlotData = useMemo(() => !displayedAnalysisResult ? null : {
+        sameMetric: config.sameMetric,
+        showLegend: !analysisCurveManagerNeeded,
+        cases: visibleAnalysisCases.map((caseData) => ({
+          label: caseData.label,
+          plot: caseData.plot
+        }))
+      }, [displayedAnalysisResult, config.sameMetric, analysisCurveManagerNeeded, visibleAnalysisCases]);
+      useEffect(() => {
+        if (!analysisSliderData || !analysisSliderData.entries.length) {
+          setAnalysisCurveSliderPosition(0);
+          return;
+        }
+        setAnalysisCurveSliderPosition((current) => Math.max(0, Math.min(current, analysisSliderData.entries.length - 1)));
+      }, [analysisSliderData]);
+      useEffect(() => {
+        if (!displayedAnalysisResult || !analysisCases.length) {
+          setAnalysisCurveSelection([]);
+          setAnalysisCurveSliderPosition(0);
+          setAnalysisCurveManagerOpen(false);
+          return;
+        }
+        if (analysisCurveManagerNeeded) {
+          setAnalysisCurveSelection(analysisSliderData && analysisSliderData.entries.length ? [] : [analysisCases[0].caseIndex]);
+          setAnalysisCurveSliderPosition(0);
+          setAnalysisCurveManagerOpen(true);
+          return;
+        }
+        setAnalysisCurveSelection(analysisCases.map((item) => item.caseIndex));
+      }, [displayedAnalysisResult]);
 const displayedGreybodyResult = useMemo(() => {
   if (displayedGreybodyRunResult) {
     return { ...displayedGreybodyRunResult, derivedFromHawking: false };
@@ -368,6 +510,12 @@ const radiationGreybodyData = useMemo(() => !displayedGreybodyResult ? null : {
   curves: displayedGreybodyResult.greybody.curves
 }, [displayedGreybodyResult]);
 const radiationSpectrumData = useMemo(() => !displayedHawkingResult ? null : displayedHawkingResult.spectrum, [displayedHawkingResult]);
+const greybodyOrderSweepData = useMemo(() => !greybodyCompareResult ? null : greybodyCompareResult.orderComparison, [greybodyCompareResult]);
+const greybodyOrderDifferenceData = useMemo(() => !greybodyCompareResult ? null : greybodyCompareResult.orderDifferences, [greybodyCompareResult]);
+const greybodyCompareWarnings = useMemo(() => uniqueWarnings(greybodyCompareResult ? greybodyCompareResult.warnings : []), [greybodyCompareResult]);
+const greybodyCompareProgressValue = useMemo(() => greybodyCompareProgress && greybodyCompareProgress.total > 0
+  ? Math.round((greybodyCompareProgress.completed / greybodyCompareProgress.total) * 100)
+  : 0, [greybodyCompareProgress]);
       const qnmWarnings = uniqueWarnings((displayedQnmResult ? displayedQnmResult.warnings || [] : []).concat(displayedQnmResult ? displayedQnmResult.cases.flatMap((item) => item.warnings) : []));
       const analysisWarnings = uniqueWarnings((displayedAnalysisResult ? displayedAnalysisResult.warnings || [] : []).concat(displayedAnalysisResult ? displayedAnalysisResult.cases.flatMap((item) => item.warnings || []) : []));
       const greybodyWarnings = uniqueWarnings(displayedGreybodyRunResult ? displayedGreybodyRunResult.warnings : []);
@@ -449,6 +597,7 @@ const radiationSpectrumData = useMemo(() => !displayedHawkingResult ? null : dis
           qnm: { status, progress },
           analysis: { status: analysisStatus, progress: analysisProgress },
           greybody: { status: greybodyStatus, progress: greybodyProgress },
+          greybodyCompare: { status: greybodyCompareStatus, progress: greybodyCompareProgress },
           hawking: { status: hawkingStatus, progress: hawkingProgress }
         };
         const selected = globalTask && map[globalTask] ? map[globalTask] : map.qnm;
@@ -459,7 +608,7 @@ const radiationSpectrumData = useMemo(() => !displayedHawkingResult ? null : dis
           status: selected.status,
           progressValue
         };
-      }, [globalTask, status, progress, analysisStatus, analysisProgress, greybodyStatus, greybodyProgress, hawkingStatus, hawkingProgress]);
+      }, [globalTask, status, progress, analysisStatus, analysisProgress, greybodyStatus, greybodyProgress, greybodyCompareStatus, greybodyCompareProgress, hawkingStatus, hawkingProgress]);
       useEffect(() => {
         if (!scanChartData && activeTab === "modes") {
           setActiveTab("potential");
@@ -515,7 +664,6 @@ const updateConfig = (patch) => setConfig((current) => {
           ell: clampInt(Number(config.ell), config.perturbationType === "electromagnetic" ? 1 : 0),
           overtoneMax: clampInt(Number(config.overtoneMax), 0),
           mainOrder: Number(config.mainOrder),
-          showAllOrders: !!config.showAllOrders,
           precision: Number(config.precision),
           spectralNodes: Number(config.spectralNodes),
           plotSamples: Number(config.plotSamples),
@@ -541,6 +689,45 @@ const updateConfig = (patch) => setConfig((current) => {
             greybodyEllMin: ellMin,
             greybodyEllMax: ellMax,
             ellCutoff: clampInt(Number(radiationConfig.ellCutoff), ellFloor)
+          }
+        };
+      };
+      const collectGreybodyOrderComparisonConfig = () => {
+        const runConfig = collectConfig();
+        if (hasScanRange(parameterSpecs)) {
+          throw new Error("Greybody order comparison currently requires fixed parameter values. Set every metric parameter to a single value.");
+        }
+        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const ellValue = Number(greybodyCompareSettings.ell);
+        const orderMinValue = Number(greybodyCompareSettings.orderMin);
+        const orderMaxValue = Number(greybodyCompareSettings.orderMax);
+        if (!Number.isFinite(ellValue)) {
+          throw new Error("Enter a finite ell value for the order comparison.");
+        }
+        if (!Number.isFinite(orderMinValue) || !Number.isFinite(orderMaxValue)) {
+          throw new Error("Enter finite integer bounds for the WKB-order comparison.");
+        }
+        const ell = Math.max(ellFloor, Math.floor(ellValue));
+        const orderMin = Math.max(1, Math.min(maxAvailableWkbOrder, Math.floor(orderMinValue)));
+        const orderMax = Math.max(1, Math.min(maxAvailableWkbOrder, Math.floor(orderMaxValue)));
+        if (orderMax < orderMin) {
+          throw new Error("The upper WKB order must be greater than or equal to the lower order.");
+        }
+        return {
+          runConfig,
+          radiation: {
+            omegaMin: String(radiationConfig.omegaMin).trim(),
+            omegaMax: String(radiationConfig.omegaMax).trim(),
+            omegaPoints: clampInt(Number(radiationConfig.omegaPoints), 25),
+            greybodyEll: ell,
+            greybodyEllMin: ell,
+            greybodyEllMax: ell,
+            ellCutoff: clampInt(Number(radiationConfig.ellCutoff), ellFloor)
+          },
+          comparison: {
+            ell,
+            orderMin,
+            orderMax
           }
         };
       };
@@ -574,13 +761,258 @@ const updateConfig = (patch) => setConfig((current) => {
         const clearGreybodyComputation = () => {
           setGreybodyResult(null);
         };
-        const clearHawkingComputation = () => {
-          setHawkingResult(null);
+      const clearGreybodyOrderComparison = () => {
+        setGreybodyCompareResult(null);
+      };
+      const clearHawkingComputation = () => {
+        setHawkingResult(null);
+      };
+      const openAnalysisCurveManager = () => {
+        setWindowPositions((current) => ({ ...current, analysisCurveManager: defaultWindowPositions().analysisCurveManager }));
+        setAnalysisCurveManagerOpen(true);
+      };
+      const closeAnalysisCurveManager = () => {
+        setAnalysisCurveManagerOpen(false);
+      };
+      const toggleAnalysisCurveSelection = (caseIndex) => {
+        setAnalysisCurveSelection((current) => current.includes(caseIndex) ? current.filter((item) => item !== caseIndex) : current.concat(caseIndex).sort((a, b) => a - b));
+      };
+      const openGreybodyCompareWindow = () => {
+        const ellFloor = config.perturbationType === "electromagnetic" ? 1 : 0;
+        const defaultEll = Math.max(ellFloor, clampInt(Number(radiationConfig.greybodyEllMin != null ? radiationConfig.greybodyEllMin : radiationConfig.greybodyEll), ellFloor));
+        const suggestedMax = Math.max(1, Math.min(maxAvailableWkbOrder, clampInt(Number(config.mainOrder), 1)));
+        setGreybodyCompareSettings((current) => {
+            const nextOrderMax = Math.max(1, Math.min(maxAvailableWkbOrder, clampInt(Number(current.orderMax), suggestedMax)));
+            const nextOrderMin = Math.max(1, Math.min(nextOrderMax, clampInt(Number(current.orderMin), Math.max(1, nextOrderMax - 2))));
+            return {
+              ell: defaultEll,
+              orderMin: nextOrderMin,
+              orderMax: nextOrderMax
+            };
+          });
+          setWindowPositions((current) => ({ ...current, greybodyCompare: defaultWindowPositions().greybodyCompare }));
+          setGreybodyCompareOpen(true);
+        };
+        const closeGreybodyCompareWindow = () => {
+          setGreybodyCompareOpen(false);
         };
         const onPreset = (key) => {
           const values = presets[key].values;
           setConfig({ presetKey: key, ...values });
           setParameterSpecs(values.parameterSpecs);
+        };
+        const parallelWorkerCount = () => Math.max(1, clampInt(Number(config.parallelRadiationWorkers), 1));
+        const parallelWorkersEnabled = () => !!config.parallelRadiation && parallelWorkerCount() > 1;
+        const formatTaskParams = (params) => Object.entries(params || {}).map(([name, value]) => `${name}=${value}`).join(", ") || "default parameters";
+        const buildSerializableParameterGrid = (runConfig) => {
+          const parsed = Core.Solver.parseExpressions(runConfig);
+          const ctx = Core.Numerics.createContext(Math.max(40, Number(runConfig.precision)));
+          const grid = Core.Solver.buildParameterGrid(parsed.parameterNames, runConfig.parameterSpecs || {}, ctx).map((params) => Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])));
+          return {
+            parameterNames: parsed.parameterNames,
+            grid
+          };
+        };
+        const buildFixedParameterSpecs = (params) => Object.fromEntries(Object.entries(params).map(([name, value]) => [name, { ...defaultSpec, mode: "value", value: String(value) }]));
+        const buildFixedConfig = (runConfig, params, overrides = {}) => ({
+          ...runConfig,
+          ...overrides,
+          parameterSpecs: buildFixedParameterSpecs(params)
+        });
+        const runSingleQnmComputation = (runConfig, initialStatus) => {
+          disposeWorkerCollection(radiationPoolRef.current);
+          radiationPoolRef.current = [];
+          disposeWorker(workerRef.current);
+          workerRef.current = null;
+          setGlobalTask("qnm");
+          setStatus(initialStatus || "Starting the worker and preparing the computation");
+          setProgress({ completed: 0, total: 1 });
+          let worker;
+          try {
+            worker = createWorker();
+          } catch (_error) {
+            setStatus("Worker startup failed");
+            setError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+            return;
+          }
+          workerRef.current = worker;
+          let ready = false;
+          const startupTimer = window.setTimeout(() => {
+            if (workerRef.current && !ready) {
+              setStatus("Worker did not start");
+              setError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+              disposeWorker(workerRef.current);
+              workerRef.current = null;
+            }
+          }, 3000);
+          worker.addEventListener("error", () => {
+            window.clearTimeout(startupTimer);
+            setStatus("Worker startup failed");
+            setError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+            disposeWorker(workerRef.current);
+            workerRef.current = null;
+          });
+          worker.addEventListener("message", (event) => {
+            const message = event.data;
+            if (message.type === "ready") {
+              ready = true;
+              window.clearTimeout(startupTimer);
+              setStatus("Worker is running, computation in progress");
+              return;
+            }
+            if (message.type === "progress") {
+              setStatus(`Processed ${message.completed} of ${message.total}`);
+              setProgress({ completed: message.completed, total: message.total });
+              return;
+            }
+            if (message.type === "done") {
+              window.clearTimeout(startupTimer);
+              setStatus("Computation finished");
+              setProgress({ completed: 1, total: 1 });
+              setResult(message.result);
+              setSelectedRowIndex(null);
+              setDrawerTab("orders");
+              setModeSource("wkb");
+              disposeWorker(workerRef.current);
+              workerRef.current = null;
+              return;
+            }
+            if (message.type === "error") {
+              window.clearTimeout(startupTimer);
+              setStatus("Computation failed");
+              setError(message.message);
+              disposeWorker(workerRef.current);
+              workerRef.current = null;
+            }
+          });
+          worker.postMessage({ type: "run", config: { ...runConfig, precisionCheck: false, storePlots: estimateCaseCount(runConfig) === 1 } });
+        };
+        const runParallelQnmComputation = (runConfig) => {
+          disposeWorker(workerRef.current);
+          workerRef.current = null;
+          disposeWorkerCollection(radiationPoolRef.current);
+          radiationPoolRef.current = [];
+          setGlobalTask("qnm");
+          setStatus("Preparing parallel QNM computation");
+          setProgress({ completed: 0, total: 1 });
+          let plan;
+          try {
+            plan = buildSerializableParameterGrid(runConfig);
+          } catch (_error) {
+            runSingleQnmComputation(runConfig);
+            return;
+          }
+          if (plan.grid.length <= 1) {
+            runSingleQnmComputation(runConfig);
+            return;
+          }
+          const queue = plan.grid.map((params, caseIndex) => ({ caseIndex, params }));
+          const workerCount = Math.min(parallelWorkerCount(), queue.length);
+          const pool = [];
+          const warnings = [];
+          const cases = Array(queue.length).fill(null);
+          let finished = false;
+          let active = 0;
+          let completed = 0;
+          let readyWorkers = 0;
+          radiationPoolRef.current = pool;
+          const finalizeIfDone = () => {
+            if (finished || active > 0 || queue.length > 0) {
+              return;
+            }
+            finished = true;
+            const validCases = cases.filter(Boolean);
+            if (!validCases.length) {
+              setStatus("Computation failed");
+              setError(uniqueWarnings(warnings)[0] || "No valid parameter points were computed.");
+            } else {
+              setStatus("Computation finished");
+              setProgress({ completed: 1, total: 1 });
+              setResult({
+                parameterNames: plan.parameterNames,
+                mainOrder: runConfig.mainOrder,
+                warnings: uniqueWarnings(warnings),
+                cases: validCases
+              });
+              setSelectedRowIndex(null);
+              setDrawerTab("orders");
+              setModeSource("wkb");
+            }
+            disposeWorkerCollection(radiationPoolRef.current);
+            radiationPoolRef.current = [];
+          };
+          const failParallel = () => {
+            if (finished) return;
+            finished = true;
+            disposeWorkerCollection(radiationPoolRef.current);
+            radiationPoolRef.current = [];
+            runSingleQnmComputation(runConfig, "Parallel QNM computation failed, retrying in single-worker mode");
+          };
+          const dispatchNext = (worker) => {
+            const next = queue.shift();
+            if (!next) {
+              finalizeIfDone();
+              return;
+            }
+            active += 1;
+            worker.postMessage({
+              type: "detail",
+              config: { ...runConfig, precisionCheck: false, storePlots: false },
+              params: next.params,
+              caseIndex: next.caseIndex
+            });
+          };
+          const startupTimer = window.setTimeout(() => {
+            if (!readyWorkers) {
+              failParallel();
+            }
+          }, 3000);
+          for (let index = 0; index < workerCount; index += 1) {
+            let worker;
+            try {
+              worker = createWorker();
+            } catch (_error) {
+              window.clearTimeout(startupTimer);
+              failParallel();
+              return;
+            }
+            pool.push(worker);
+            worker.addEventListener("error", () => {
+              window.clearTimeout(startupTimer);
+              failParallel();
+            });
+            worker.addEventListener("message", (event) => {
+              const message = event.data;
+              if (message.type === "ready") {
+                readyWorkers += 1;
+                if (readyWorkers) {
+                  window.clearTimeout(startupTimer);
+                }
+                dispatchNext(worker);
+                return;
+              }
+              if (finished) {
+                return;
+              }
+              if (message.type === "detailDone") {
+                cases[message.caseIndex] = message.caseData;
+                completed += 1;
+                active -= 1;
+                setStatus(`Processed ${completed} of ${cases.length} QNM parameter points in parallel`);
+                setProgress({ completed, total: cases.length });
+                dispatchNext(worker);
+                return;
+              }
+              if (message.type === "detailError") {
+                pushUnique(warnings, `[${formatTaskParams(plan.grid[message.caseIndex] || {})}] ${message.message}`);
+                completed += 1;
+                active -= 1;
+                setStatus(`Processed ${completed} of ${cases.length} QNM parameter points in parallel`);
+                setProgress({ completed, total: cases.length });
+                dispatchNext(worker);
+              }
+            });
+          }
         };
         const runQnmComputation = () => {
           setError("");
@@ -591,75 +1023,218 @@ const updateConfig = (patch) => setConfig((current) => {
           try {
             runConfig = collectConfig();
           } catch (runError) {
-          setError(runError.message || String(runError));
-          return;
-        }
-        disposeWorker(workerRef.current);
-        setGlobalTask("qnm");
-        setStatus("Starting the worker and preparing the computation");
-        setProgress({ completed: 0, total: 1 });
-        setLastRunConfig(runConfig);
-        let worker;
-        try {
-          worker = createWorker();
-        } catch (_error) {
-          setStatus("Worker startup failed");
-          setError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
-          return;
-        }
-        workerRef.current = worker;
-        let ready = false;
-        const startupTimer = window.setTimeout(() => {
-          if (workerRef.current && !ready) {
-            setStatus("Worker did not start");
-            setError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
-            disposeWorker(workerRef.current);
-            workerRef.current = null;
-          }
-        }, 3000);
-        worker.addEventListener("error", () => {
-          window.clearTimeout(startupTimer);
-          setStatus("Worker startup failed");
-          setError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
-          disposeWorker(workerRef.current);
-          workerRef.current = null;
-        });
-        worker.addEventListener("message", (event) => {
-          const message = event.data;
-          if (message.type === "ready") {
-            ready = true;
-            window.clearTimeout(startupTimer);
-            setStatus("Worker is running, computation in progress");
+            setError(runError.message || String(runError));
             return;
           }
-          if (message.type === "progress") {
-            setStatus(`Processed ${message.completed} of ${message.total}`);
-            setProgress({ completed: message.completed, total: message.total });
+          setLastRunConfig(runConfig);
+          if (parallelWorkersEnabled() && estimateCaseCount(runConfig) > 1) {
+            runParallelQnmComputation(runConfig);
             return;
           }
-          if (message.type === "done") {
-            window.clearTimeout(startupTimer);
-            setStatus("Computation finished");
-            setProgress({ completed: 1, total: 1 });
-            setResult(message.result);
-            setSelectedRowIndex(null);
-            setDrawerTab("orders");
-            setModeSource("wkb");
-            disposeWorker(workerRef.current);
-            workerRef.current = null;
-            return;
-          }
-          if (message.type === "error") {
-            window.clearTimeout(startupTimer);
-            setStatus("Computation failed");
-            setError(message.message);
-            disposeWorker(workerRef.current);
-            workerRef.current = null;
-          }
-        });
-        worker.postMessage({ type: "run", config: { ...runConfig, precisionCheck: false, storePlots: estimateCaseCount(runConfig) === 1 } });
-      };
+          runSingleQnmComputation(runConfig);
+        };
         const onRun = () => runQnmComputation();
+        const runSingleAnalysis = (runConfig, initialStatus) => {
+          disposeWorkerCollection(radiationPoolRef.current);
+          radiationPoolRef.current = [];
+          disposeWorker(analysisWorkerRef.current);
+          analysisWorkerRef.current = null;
+          setGlobalTask("analysis");
+          setAnalysisStatus(initialStatus || "Starting the worker and preparing the analysis");
+          setAnalysisProgress({ completed: 0, total: 1 });
+          let worker;
+          try {
+            worker = createWorker();
+          } catch (_error) {
+            setAnalysisStatus("Worker startup failed");
+            setAnalysisError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+            return;
+          }
+          analysisWorkerRef.current = worker;
+          let ready = false;
+          const startupTimer = window.setTimeout(() => {
+            if (analysisWorkerRef.current && !ready) {
+              setAnalysisStatus("Worker did not start");
+              setAnalysisError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+              disposeWorker(analysisWorkerRef.current);
+              analysisWorkerRef.current = null;
+            }
+          }, 3000);
+          worker.addEventListener("error", () => {
+            window.clearTimeout(startupTimer);
+            setAnalysisStatus("Worker startup failed");
+            setAnalysisError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+            disposeWorker(analysisWorkerRef.current);
+            analysisWorkerRef.current = null;
+          });
+          worker.addEventListener("message", (event) => {
+            const message = event.data;
+            if (message.type === "ready") {
+              ready = true;
+              window.clearTimeout(startupTimer);
+              setAnalysisStatus("Worker is running, analysis in progress");
+              return;
+            }
+            if (message.type === "analysisProgress") {
+              setAnalysisStatus(`Processed ${message.completed} of ${message.total} analysis points`);
+              setAnalysisProgress({ completed: message.completed, total: message.total });
+              return;
+            }
+            if (message.type === "analysisDone") {
+              window.clearTimeout(startupTimer);
+              setAnalysisStatus("Analysis finished");
+              setAnalysisProgress({ completed: 1, total: 1 });
+              setAnalysisResult(message.result);
+              disposeWorker(analysisWorkerRef.current);
+              analysisWorkerRef.current = null;
+              return;
+            }
+            if (message.type === "analysisError") {
+              window.clearTimeout(startupTimer);
+              setAnalysisStatus("Analysis failed");
+              setAnalysisError(message.message);
+              disposeWorker(analysisWorkerRef.current);
+              analysisWorkerRef.current = null;
+            }
+          });
+          worker.postMessage({ type: "runAnalysis", config: { ...runConfig, precisionCheck: false, storePlots: true } });
+        };
+        const runParallelAnalysis = (runConfig) => {
+          disposeWorker(analysisWorkerRef.current);
+          analysisWorkerRef.current = null;
+          disposeWorkerCollection(radiationPoolRef.current);
+          radiationPoolRef.current = [];
+          setGlobalTask("analysis");
+          setAnalysisStatus("Preparing parallel analysis");
+          setAnalysisProgress({ completed: 0, total: 1 });
+          let plan;
+          try {
+            plan = buildSerializableParameterGrid(runConfig);
+          } catch (_error) {
+            runSingleAnalysis(runConfig);
+            return;
+          }
+          if (plan.grid.length <= 1) {
+            runSingleAnalysis(runConfig);
+            return;
+          }
+          const queue = plan.grid.map((params, caseIndex) => ({ caseIndex, params }));
+          const workerCount = Math.min(parallelWorkerCount(), queue.length);
+          const pool = [];
+          const warnings = [];
+          const cases = Array(queue.length).fill(null);
+          let finished = false;
+          let active = 0;
+          let completed = 0;
+          let readyWorkers = 0;
+          radiationPoolRef.current = pool;
+          const finalizeIfDone = () => {
+            if (finished || active > 0 || queue.length > 0) {
+              return;
+            }
+            finished = true;
+            const validCases = cases.filter(Boolean);
+            if (!validCases.length) {
+              setAnalysisStatus("Analysis failed");
+              setAnalysisError(uniqueWarnings(warnings)[0] || "No valid parameter point was available for analysis.");
+            } else {
+              setAnalysisStatus("Analysis finished");
+              setAnalysisProgress({ completed: 1, total: 1 });
+              setAnalysisResult({
+                parameterNames: plan.parameterNames,
+                warnings: uniqueWarnings(warnings),
+                cases: validCases
+              });
+            }
+            disposeWorkerCollection(radiationPoolRef.current);
+            radiationPoolRef.current = [];
+          };
+          const failParallel = () => {
+            if (finished) return;
+            finished = true;
+            disposeWorkerCollection(radiationPoolRef.current);
+            radiationPoolRef.current = [];
+            runSingleAnalysis(runConfig, "Parallel analysis failed, retrying in single-worker mode");
+          };
+          const dispatchNext = (worker) => {
+            const next = queue.shift();
+            if (!next) {
+              finalizeIfDone();
+              return;
+            }
+            active += 1;
+            worker.__task = next;
+            worker.postMessage({
+              type: "runAnalysis",
+              config: {
+                ...buildFixedConfig(runConfig, next.params),
+                precisionCheck: false,
+                storePlots: true
+              }
+            });
+          };
+          const startupTimer = window.setTimeout(() => {
+            if (!readyWorkers) {
+              failParallel();
+            }
+          }, 3000);
+          for (let index = 0; index < workerCount; index += 1) {
+            let worker;
+            try {
+              worker = createWorker();
+            } catch (_error) {
+              window.clearTimeout(startupTimer);
+              failParallel();
+              return;
+            }
+            pool.push(worker);
+            worker.addEventListener("error", () => {
+              window.clearTimeout(startupTimer);
+              failParallel();
+            });
+            worker.addEventListener("message", (event) => {
+              const message = event.data;
+              if (message.type === "ready") {
+                readyWorkers += 1;
+                if (readyWorkers) {
+                  window.clearTimeout(startupTimer);
+                }
+                dispatchNext(worker);
+                return;
+              }
+              if (finished) {
+                return;
+              }
+              if (message.type === "analysisDone") {
+                const task = worker.__task;
+                const caseData = message.result && message.result.cases && message.result.cases[0] ? message.result.cases[0] : null;
+                if (caseData) {
+                  cases[task.caseIndex] = caseData;
+                } else {
+                  pushUnique(warnings, `[${formatTaskParams(task.params)}] The analysis worker returned no plot data.`);
+                }
+                if (message.result && Array.isArray(message.result.warnings)) {
+                  message.result.warnings.forEach((warning) => pushUnique(warnings, warning));
+                }
+                completed += 1;
+                active -= 1;
+                setAnalysisStatus(`Processed ${completed} of ${cases.length} analysis parameter points in parallel`);
+                setAnalysisProgress({ completed, total: cases.length });
+                dispatchNext(worker);
+                return;
+              }
+              if (message.type === "analysisError") {
+                const task = worker.__task;
+                pushUnique(warnings, `[${formatTaskParams(task ? task.params : {})}] ${message.message}`);
+                completed += 1;
+                active -= 1;
+                setAnalysisStatus(`Processed ${completed} of ${cases.length} analysis parameter points in parallel`);
+                setAnalysisProgress({ completed, total: cases.length });
+                dispatchNext(worker);
+              }
+            });
+          }
+        };
         const onRunAnalysis = () => {
           setAnalysisError("");
           if (isCurrentMetricSingleCase()) {
@@ -670,69 +1245,287 @@ const updateConfig = (patch) => setConfig((current) => {
             runConfig = collectConfig();
           } catch (runError) {
             setAnalysisError(runError.message || String(runError));
-          return;
-        }
-        disposeWorker(analysisWorkerRef.current);
-        setGlobalTask("analysis");
-        setAnalysisStatus("Starting the worker and preparing the analysis");
-        setAnalysisProgress({ completed: 0, total: 1 });
-        let worker;
-        try {
-          worker = createWorker();
-        } catch (_error) {
-          setAnalysisStatus("Worker startup failed");
-          setAnalysisError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
-          return;
-        }
-        analysisWorkerRef.current = worker;
-        let ready = false;
-        const startupTimer = window.setTimeout(() => {
-          if (analysisWorkerRef.current && !ready) {
-            setAnalysisStatus("Worker did not start");
-            setAnalysisError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
-            disposeWorker(analysisWorkerRef.current);
-            analysisWorkerRef.current = null;
-          }
-        }, 3000);
-        worker.addEventListener("error", () => {
-          window.clearTimeout(startupTimer);
-          setAnalysisStatus("Worker startup failed");
-          setAnalysisError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
-          disposeWorker(analysisWorkerRef.current);
-          analysisWorkerRef.current = null;
-        });
-        worker.addEventListener("message", (event) => {
-          const message = event.data;
-          if (message.type === "ready") {
-            ready = true;
-            window.clearTimeout(startupTimer);
-            setAnalysisStatus("Worker is running, analysis in progress");
             return;
           }
-          if (message.type === "analysisProgress") {
-            setAnalysisStatus(`Processed ${message.completed} of ${message.total} analysis points`);
-            setAnalysisProgress({ completed: message.completed, total: message.total });
+          if (parallelWorkersEnabled() && estimateCaseCount(runConfig) > 1) {
+            runParallelAnalysis(runConfig);
             return;
           }
-          if (message.type === "analysisDone") {
-            window.clearTimeout(startupTimer);
-            setAnalysisStatus("Analysis finished");
-            setAnalysisProgress({ completed: 1, total: 1 });
-            setAnalysisResult(message.result);
-            disposeWorker(analysisWorkerRef.current);
-            analysisWorkerRef.current = null;
+          runSingleAnalysis(runConfig);
+        };
+        const runSingleGreybodyOrderComparison = (payload) => {
+          disposeWorkerCollection(radiationPoolRef.current);
+          radiationPoolRef.current = [];
+          disposeWorker(greybodyCompareWorkerRef.current);
+          greybodyCompareWorkerRef.current = null;
+          setGlobalTask("greybodyCompare");
+          setGreybodyCompareStatus("Starting the worker in single-worker mode and preparing the greybody order comparison");
+          setGreybodyCompareProgress({ completed: 0, total: 1 });
+          let worker;
+          try {
+            worker = createWorker();
+          } catch (_error) {
+            setGreybodyCompareStatus("Worker startup failed");
+            setGreybodyCompareError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
             return;
           }
-          if (message.type === "analysisError") {
+          greybodyCompareWorkerRef.current = worker;
+          let ready = false;
+          const startupTimer = window.setTimeout(() => {
+            if (greybodyCompareWorkerRef.current && !ready) {
+              setGreybodyCompareStatus("Worker did not start");
+              setGreybodyCompareError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+              disposeWorker(greybodyCompareWorkerRef.current);
+              greybodyCompareWorkerRef.current = null;
+            }
+          }, 3000);
+          worker.addEventListener("error", () => {
             window.clearTimeout(startupTimer);
-            setAnalysisStatus("Analysis failed");
-            setAnalysisError(message.message);
-            disposeWorker(analysisWorkerRef.current);
-            analysisWorkerRef.current = null;
+            setGreybodyCompareStatus("Worker startup failed");
+            setGreybodyCompareError(window.location.protocol === "file:" ? "The worker did not start from file://. Serve the project locally with: python -m http.server 8000." : "Could not start the worker.");
+            disposeWorker(greybodyCompareWorkerRef.current);
+            greybodyCompareWorkerRef.current = null;
+          });
+          worker.addEventListener("message", (event) => {
+            const message = event.data;
+            if (message.type === "ready") {
+              ready = true;
+              window.clearTimeout(startupTimer);
+              setGreybodyCompareStatus("Worker is running, greybody order comparison in progress (single worker)");
+              return;
+            }
+            if (message.type === "greybodyOrderComparisonProgress") {
+              setGreybodyCompareStatus(`Processed ${message.completed} of ${message.total} greybody order-comparison points`);
+              setGreybodyCompareProgress({ completed: message.completed, total: message.total });
+              return;
+            }
+            if (message.type === "greybodyOrderComparisonDone") {
+              window.clearTimeout(startupTimer);
+              setGreybodyCompareStatus("Greybody order comparison finished");
+              setGreybodyCompareProgress({ completed: 1, total: 1 });
+              setGreybodyCompareResult(message.result);
+              disposeWorker(greybodyCompareWorkerRef.current);
+              greybodyCompareWorkerRef.current = null;
+              return;
+            }
+            if (message.type === "greybodyOrderComparisonError") {
+              window.clearTimeout(startupTimer);
+              setGreybodyCompareStatus("Greybody order comparison failed");
+              setGreybodyCompareError(message.message);
+              disposeWorker(greybodyCompareWorkerRef.current);
+              greybodyCompareWorkerRef.current = null;
+            }
+          });
+          worker.postMessage({
+            type: "runGreybodyOrderComparison",
+            config: { ...payload.runConfig, precisionCheck: false, storePlots: true },
+            radiation: payload.radiation,
+            comparison: payload.comparison
+          });
+        };
+        const finalizeParallelGreybodyOrderComparison = (payload, states) => {
+          const warnings = [];
+          const ctx = Core.Numerics.createContext(Math.max(40, Number(payload.runConfig.precision)));
+          const validStates = states.filter((item) => {
+            if (!item.result) {
+              pushUnique(warnings, `[ell=${payload.comparison.ell}] WKB ${item.order} did not finish successfully and was skipped.`);
+              return false;
+            }
+            (item.result.warnings || []).forEach((warning) => pushUnique(warnings, warning));
+            const curve = item.result.greybody && item.result.greybody.curves && item.result.greybody.curves[0];
+            return !!(curve && curve.values && curve.values.some((value) => value !== null && value !== undefined));
+          });
+          if (!validStates.length) {
+            throw new Error(uniqueWarnings(warnings)[0] || "No valid greybody order curve was obtained for the requested comparison range.");
           }
-        });
-        worker.postMessage({ type: "runAnalysis", config: { ...runConfig, precisionCheck: false, storePlots: true } });
-      };
+          const curves = validStates.map((item) => ({
+            order: item.order,
+            label: `WKB ${item.order}`,
+            values: item.result.greybody.curves[0].values
+          }));
+          const referenceCurve = curves[curves.length - 1];
+          if (referenceCurve.order !== payload.comparison.orderMax) {
+            pushUnique(warnings, `[ell=${payload.comparison.ell}] The requested highest WKB order ${payload.comparison.orderMax} produced no physical points; differences are shown relative to the highest order with at least one physical point, ${referenceCurve.order}.`);
+          }
+          const differenceCurves = curves.filter((curve) => curve.order !== referenceCurve.order).map((curve) => ({
+            order: curve.order,
+            label: `WKB ${referenceCurve.order} - WKB ${curve.order}`,
+            values: curve.values.map((value, index) => value === null || referenceCurve.values[index] === null ? null : new ctx.D(referenceCurve.values[index]).minus(new ctx.D(value)).toString())
+          }));
+          const firstResult = validStates[0].result;
+          return {
+            params: firstResult.params,
+            parameterNames: firstResult.parameterNames,
+            perturbationType: firstResult.perturbationType,
+            ell: payload.comparison.ell,
+            orderMin: payload.comparison.orderMin,
+            orderMax: payload.comparison.orderMax,
+            referenceOrder: referenceCurve.order,
+            successfulOrders: curves.map((curve) => curve.order),
+            horizon: firstResult.horizon,
+            surfaceGravity: firstResult.surfaceGravity,
+            temperature: firstResult.temperature,
+            warnings: uniqueWarnings(warnings),
+            orderComparison: {
+              x: firstResult.greybody.x,
+              ell: payload.comparison.ell,
+              referenceOrder: referenceCurve.order,
+              curves
+            },
+            orderDifferences: {
+              x: firstResult.greybody.x,
+              ell: payload.comparison.ell,
+              referenceOrder: referenceCurve.order,
+              curves: differenceCurves
+            },
+            diagnostics: Object.assign({}, firstResult.diagnostics, {
+              kind: "greybody-order-comparison",
+              ell: payload.comparison.ell,
+              referenceOrder: referenceCurve.order
+            })
+          };
+        };
+        const runParallelGreybodyOrderComparison = (payload) => {
+          disposeWorker(greybodyCompareWorkerRef.current);
+          greybodyCompareWorkerRef.current = null;
+          disposeWorkerCollection(radiationPoolRef.current);
+          radiationPoolRef.current = [];
+          setGlobalTask("greybodyCompare");
+          setGreybodyCompareStatus("Preparing parallel greybody order comparison");
+          const tasks = [];
+          for (let order = payload.comparison.orderMin; order <= payload.comparison.orderMax; order += 1) {
+            tasks.push({ order });
+          }
+          if (tasks.length <= 1) {
+            runSingleGreybodyOrderComparison(payload);
+            return;
+          }
+          setGreybodyCompareProgress({ completed: 0, total: tasks.length });
+          const workerCount = Math.min(parallelWorkerCount(), tasks.length);
+          const queue = tasks.slice();
+          const states = tasks.map((task) => ({ order: task.order, result: null }));
+          const pool = [];
+          let finished = false;
+          let active = 0;
+          let completed = 0;
+          let readyWorkers = 0;
+          radiationPoolRef.current = pool;
+          const finalizeIfDone = () => {
+            if (finished || active > 0 || queue.length > 0) {
+              return;
+            }
+            finished = true;
+            try {
+              const aggregate = finalizeParallelGreybodyOrderComparison(payload, states);
+              setGreybodyCompareStatus("Greybody order comparison finished");
+              setGreybodyCompareProgress({ completed: 1, total: 1 });
+              setGreybodyCompareResult(aggregate);
+            } catch (aggregateError) {
+              setGreybodyCompareStatus("Greybody order comparison failed");
+              setGreybodyCompareError(aggregateError.message || String(aggregateError));
+            }
+            disposeWorkerCollection(radiationPoolRef.current);
+            radiationPoolRef.current = [];
+          };
+          const failParallel = () => {
+            if (finished) return;
+            finished = true;
+            disposeWorkerCollection(radiationPoolRef.current);
+            radiationPoolRef.current = [];
+            runSingleGreybodyOrderComparison(payload);
+          };
+          const dispatchNext = (worker) => {
+            const next = queue.shift();
+            if (!next) {
+              finalizeIfDone();
+              return;
+            }
+            active += 1;
+            worker.__task = next;
+            worker.postMessage({
+              type: "runGreybody",
+              config: {
+                ...payload.runConfig,
+                mainOrder: next.order,
+                precisionCheck: false,
+                storePlots: true
+              },
+              radiation: payload.radiation
+            });
+          };
+          const startupTimer = window.setTimeout(() => {
+            if (!readyWorkers) {
+              failParallel();
+            }
+          }, 3000);
+          for (let index = 0; index < workerCount; index += 1) {
+            let worker;
+            try {
+              worker = createWorker();
+            } catch (_error) {
+              window.clearTimeout(startupTimer);
+              failParallel();
+              return;
+            }
+            pool.push(worker);
+            worker.addEventListener("error", () => {
+              window.clearTimeout(startupTimer);
+              failParallel();
+            });
+            worker.addEventListener("message", (event) => {
+              const message = event.data;
+              if (message.type === "ready") {
+                readyWorkers += 1;
+                if (readyWorkers) {
+                  window.clearTimeout(startupTimer);
+                }
+                dispatchNext(worker);
+                return;
+              }
+              if (finished) {
+                return;
+              }
+              if (message.type === "greybodyDone") {
+                const task = worker.__task;
+                const state = states.find((item) => item.order === task.order);
+                if (state) {
+                  state.result = message.result;
+                }
+                completed += 1;
+                active -= 1;
+                setGreybodyCompareStatus(`Processed ${completed} of ${states.length} WKB orders in parallel`);
+                setGreybodyCompareProgress({ completed, total: states.length });
+                dispatchNext(worker);
+                return;
+              }
+              if (message.type === "greybodyError") {
+                completed += 1;
+                active -= 1;
+                setGreybodyCompareStatus(`Processed ${completed} of ${states.length} WKB orders in parallel`);
+                setGreybodyCompareProgress({ completed, total: states.length });
+                dispatchNext(worker);
+              }
+            });
+          }
+        };
+        const runGreybodyOrderComparison = () => {
+          setGreybodyCompareError("");
+          if (isCurrentMetricSingleCase()) {
+            clearGreybodyOrderComparison();
+          }
+          let payload;
+          try {
+            payload = collectGreybodyOrderComparisonConfig();
+          } catch (runError) {
+            setGreybodyCompareError(runError.message || String(runError));
+            return;
+          }
+          if (parallelWorkersEnabled() && payload.comparison.orderMax > payload.comparison.orderMin) {
+            runParallelGreybodyOrderComparison(payload);
+            return;
+          }
+          runSingleGreybodyOrderComparison(payload);
+        };
         const runSingleRadiationTask = (task, payload, setters, initialStatus) => {
           disposeWorkerCollection(radiationPoolRef.current);
           radiationPoolRef.current = [];
@@ -801,31 +1594,43 @@ const updateConfig = (patch) => setConfig((current) => {
             radiation: payload.radiation
           });
         };
-        const runRadiationTask = (task, payload, setters) => {
-          if (config.parallelRadiation && Math.max(1, clampInt(Number(config.parallelRadiationWorkers), 1)) > 1) {
-            runParallelRadiationTask(task, payload, setters);
-            return;
-          }
-          runSingleRadiationTask(task, payload, setters);
-        };
+      const runRadiationTask = (task, payload, setters) => {
+        if (parallelWorkersEnabled()) {
+          runParallelRadiationTask(task, payload, setters);
+          return;
+        }
+        runSingleRadiationTask(task, payload, setters);
+      };
+      const pushTransmissionInvalidWarning = (warnings, prefix, state) => {
+        const reasons = [];
+        if (state.imagResidualWarning) reasons.push("non-negligible imaginary part after GBFactor");
+        if (state.intervalWarning) reasons.push("outside [0,1] after GBFactor");
+        if (!reasons.length) {
+          return;
+        }
+        const requestedOrder = state.requestedOrder != null ? state.requestedOrder : "requested";
+        pushUnique(warnings, `${prefix} The WKB transmission coefficient is non-physical at requested order ${requestedOrder} (${reasons.join("; ")}); non-physical points were removed from physical output.`);
+      };
       const finalizeParallelGreybody = (plan, taskStates) => {
         const warnings = uniqueWarnings(plan.warnings || []);
         const curves = plan.tasks
           .map((task) => ({ task, state: taskStates.get(task.id) }))
           .filter(({ task, state }) => {
-            const complete = state && !state.failed && state.values.every((value) => value !== null);
+            const complete = state && !state.failed;
+            const hasNonPhysicalPoints = complete && (state.imagResidualWarning || state.intervalWarning);
+            const hasPhysicalPoints = complete && state.values.some((value) => value !== null && value !== undefined);
             if (!complete) {
               pushUnique(warnings, `${task.label} did not finish successfully and was skipped.`);
             }
-            return complete;
+            if (hasNonPhysicalPoints) {
+              pushTransmissionInvalidWarning(warnings, `[${Object.entries(task.params).map(([name, value]) => `${name}=${value}`).join(", ") || "default parameters"}]`, state);
+            }
+            if (complete && !hasPhysicalPoints) {
+              pushUnique(warnings, `${task.label} produced no physical greybody points and was skipped.`);
+            }
+            return hasPhysicalPoints;
           })
           .map(({ task, state }) => {
-            if (state.imagResidualWarning) {
-              pushUnique(warnings, `[${Object.entries(task.params).map(([name, value]) => `${name}=${value}`).join(", ") || "default parameters"}] The WKB transmission coefficient has a noticeable imaginary residual after applying GBFactor.`);
-            }
-            if (state.intervalWarning) {
-              pushUnique(warnings, `[${Object.entries(task.params).map(([name, value]) => `${name}=${value}`).join(", ") || "default parameters"}] The WKB transmission coefficient moved outside the physical [0,1] interval.`);
-            }
             return {
               params: task.params,
               ell: task.ell,
@@ -858,32 +1663,48 @@ const updateConfig = (patch) => setConfig((current) => {
       };
       const finalizeParallelHawking = (plan, taskStates) => {
         const warnings = uniqueWarnings(plan.warnings || []);
-        const successfulTasks = plan.tasks
+        const availableTasks = plan.tasks
           .map((task) => ({ task, state: taskStates.get(task.id) }))
           .filter(({ task, state }) => {
-            const complete = state && !state.failed && state.values.every((value) => value !== null) && state.transmissions.every((value) => value !== null);
+            const complete = state && !state.failed;
             if (!complete) {
               pushUnique(warnings, `[ell=${task.ell}] The contribution did not finish successfully and was skipped.`);
             }
             return complete;
           });
+        const successfulTasks = availableTasks.filter(({ task, state }) => {
+          const hasNonPhysicalPoints = state.imagResidualWarning || state.intervalWarning;
+          const hasPhysicalPoints = state.values.some((value) => value !== null && value !== undefined)
+            && state.transmissions.some((value) => value !== null && value !== undefined);
+          if (hasNonPhysicalPoints) {
+            pushTransmissionInvalidWarning(warnings, `[ell=${task.ell}]`, state);
+          }
+          if (!hasPhysicalPoints) {
+            pushUnique(warnings, `[ell=${task.ell}] This contribution produced no physical transmission points and was excluded from the Hawking spectrum.`);
+          }
+          return hasPhysicalPoints;
+        });
         if (!successfulTasks.length) {
           throw new Error(warnings[0] || "No valid ell contribution was obtained for the Hawking spectrum.");
         }
         const ctx = Core.Numerics.createContext(plan.precision);
         const partials = successfulTasks.map(({ task, state }) => {
-          if (state.imagResidualWarning) {
-            pushUnique(warnings, `[ell=${task.ell}] The WKB transmission coefficient has a noticeable imaginary residual after applying GBFactor.`);
-          }
-          if (state.intervalWarning) {
-            pushUnique(warnings, `[ell=${task.ell}] The WKB transmission coefficient moved outside the physical [0,1] interval.`);
-          }
           return {
             ell: task.ell,
             values: state.values
           };
         });
-        const total = plan.omegaGrid.map((_, index) => partials.reduce((sum, item) => sum.plus(new ctx.D(item.values[index])), ctx.zero).toString());
+        const total = plan.omegaGrid.map((_, index) => {
+          let hasPhysicalPoint = false;
+          const totalAtOmega = successfulTasks.reduce((sum, { state }) => {
+            if (state.values[index] === null || state.values[index] === undefined) {
+              return sum;
+            }
+            hasPhysicalPoint = true;
+            return sum.plus(new ctx.D(state.values[index]));
+          }, ctx.zero);
+          return hasPhysicalPoint ? totalAtOmega.toString() : null;
+        });
         return {
           params: plan.params,
           parameterNames: plan.parameterNames,
@@ -1009,6 +1830,7 @@ const updateConfig = (patch) => setConfig((current) => {
             transmissions: Array(plan.omegaGrid.length).fill(null),
             imagResidualWarning: false,
             intervalWarning: false,
+            requestedOrder: plan.mainOrder,
             failed: false
           }]));
           const failedTaskIds = new Set();
@@ -1087,6 +1909,9 @@ const updateConfig = (patch) => setConfig((current) => {
                   }
                   state.imagResidualWarning = state.imagResidualWarning || resultChunk.imagResidualWarning;
                   state.intervalWarning = state.intervalWarning || resultChunk.intervalWarning;
+                  if (resultChunk.requestedOrder !== null && resultChunk.requestedOrder !== undefined) {
+                    state.requestedOrder = resultChunk.requestedOrder;
+                  }
                 }
                 completed += resultChunk.end - resultChunk.start;
                 active -= resultChunk.end - resultChunk.start;
@@ -1218,17 +2043,65 @@ const exportGreybody = () => {
         URL.revokeObjectURL(url);
       };
       const isSingleScan = !!scanChartData;
-      const metricTab = <div className="metric-section section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div><h3>Metric Definition</h3></div></div><div className="metric-block"><label className="field"><span className="field-label">Preset</span><select value={config.presetKey} onChange={(event) => onPreset(event.target.value)}>{Object.entries(presets).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</select></label><label className="toggle-inline metric-toggle-top"><input type="checkbox" checked={config.sameMetric} onChange={(event) => updateConfig({ sameMetric: event.target.checked, presetKey: "custom" })} /><span>Use f(r) for g(r)</span></label><div className="formula-grid-react"><MetricInputCard title="f(r)" description="Time component and horizon function." disabled={false} preview={metric.fPreview} onOpenEditor={() => openFormulaEditor("fExpression")} editorDisabled={false} /><MetricInputCard title="g(r)" description="Radial component of the metric." disabled={config.sameMetric} preview={metric.gPreview} onOpenEditor={() => openFormulaEditor("gExpression")} editorDisabled={config.sameMetric} /></div></div></div></div>;
-      const parametersTab = <div className="section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div><h3>Parameters</h3></div></div>{metric.error ? <div className="empty-state">Fix the metric expressions to detect parameters.</div> : metric.names.length ? <div className="parameter-editor-grid">{metric.names.map((name) => { const spec = parameterSpecs[name] || defaultSpec; const range = spec.mode === "range"; return <div key={name} className="parameter-row-react"><div className="parameter-row-react-head"><div className="parameter-name">{name}</div><select value={spec.mode} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, mode: event.target.value } }))}><option value="value">Fixed value</option><option value="range">Range</option></select></div><div className={`parameter-controls-grid${range ? "" : " compact"}`}>{!range && <label className="field"><span className="field-label">Value</span><input type="text" value={spec.value || ""} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, value: event.target.value } }))} /></label>}{range && <><label className="field"><span className="field-label">Start</span><input type="text" value={spec.start || ""} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, start: event.target.value } }))} /></label><label className="field"><span className="field-label">End</span><input type="text" value={spec.end || ""} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, end: event.target.value } }))} /></label><label className="field"><span className="field-label">Points</span><input type="number" min="2" step="1" value={spec.count || 5} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, count: Number(event.target.value) } }))} /></label></>}</div></div>; })}</div> : <div className="empty-state">No parameters other than r were detected.</div>}</div></div>;
-      const wkbSettingsTab = <div className="section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div><h3>WKB Settings</h3></div></div><div className="field-group"><label className="field"><span className="field-label">Perturbation</span><select value={config.perturbationType} onChange={(event) => updateConfig({ perturbationType: event.target.value, presetKey: "custom" })}><option value="scalar">Scalar field</option><option value="electromagnetic">Electromagnetic field</option></select></label><label className="field"><span className="field-label">ell</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={config.ell} onChange={(event) => updateConfig({ ell: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Max overtone N</span><input type="number" min="0" step="1" value={config.overtoneMax} onChange={(event) => updateConfig({ overtoneMax: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group"><label className="field"><span className="field-label">Main WKB order</span><input type="number" min="1" max="16" step="1" value={config.mainOrder} onChange={(event) => updateConfig({ mainOrder: event.target.value, presetKey: "custom" })} /></label><label className="field checkbox-field checkbox-card"><input type="checkbox" checked={config.showAllOrders} onChange={(event) => updateConfig({ showAllOrders: event.target.checked, presetKey: "custom" })} /><span>Show all orders up to the selected one</span></label></div></div></div>;
-      const numericsTab = <div className="numeric-section section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div><h3>Numerics</h3></div></div><div className="field-group three-columns"><label className="field"><span className="field-label">Decimal precision</span><input type="number" min="40" step="1" value={config.precision} onChange={(event) => updateConfig({ precision: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Chebyshev nodes</span><input type="number" min="32" max="160" step="2" value={config.spectralNodes} onChange={(event) => updateConfig({ spectralNodes: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Plot samples</span><input type="number" min="101" max="1201" step="20" value={config.plotSamples} onChange={(event) => updateConfig({ plotSamples: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group three-columns"><label className="field"><span className="field-label">Search r_min</span><input type="text" value={config.rMin} onChange={(event) => updateConfig({ rMin: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Search r_max</span><input type="text" value={config.rMax} onChange={(event) => updateConfig({ rMax: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Horizon scan points</span><input type="number" min="160" step="40" value={config.horizonSamples} onChange={(event) => updateConfig({ horizonSamples: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group"><label className="field"><span className="field-label">Peak scan points</span><input type="number" min="400" step="100" value={config.peakSamples} onChange={(event) => updateConfig({ peakSamples: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group"><label className="field checkbox-field checkbox-card"><input type="checkbox" checked={!!config.parallelRadiation} onChange={(event) => updateConfig({ parallelRadiation: event.target.checked, presetKey: "custom" })} /><span>Enable parallel workers for Greybody and Hawking</span></label><label className="field"><span className="field-label">Radiation workers</span><input type="number" min="1" max="16" step="1" disabled={!config.parallelRadiation} value={config.parallelRadiationWorkers} onChange={(event) => updateConfig({ parallelRadiationWorkers: event.target.value, presetKey: "custom" })} /></label></div></div></div>;
-const radiationView = <div className="workspace-view workspace-radiation-view"><div className="tab-bar"><button type="button" className={`tab-button${radiationTab === "greybody" ? " active" : ""}`} onClick={() => setRadiationTab("greybody")}>Greybody</button><button type="button" className={`tab-button${radiationTab === "hawking" ? " active" : ""}`} onClick={() => setRadiationTab("hawking")}>Hawking Radiation</button></div><div className="tab-panel"><div className="tab-panel-inner">{radiationTab === "greybody" && <div className="radiation-pane"><div className="card-head card-head-split"><div><h3>Greybody factors</h3></div><div className="card-head-tools"><button type="button" className="ghost-button compact-button" disabled={!displayedGreybodyResult} onClick={exportGreybody}>Export Greybody CSV</button><button type="button" className="primary-button" onClick={onRunGreybody}>Compute Greybody</button></div></div><div className="radiation-controls-grid"><label className="field"><span className="field-label">omega min</span><input type="text" value={radiationConfig.omegaMin} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMin: event.target.value }))} /></label><label className="field"><span className="field-label">omega max</span><input type="text" value={radiationConfig.omegaMax} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMax: event.target.value }))} /></label><label className="field"><span className="field-label">Frequency points</span><input type="number" min="25" step="2" value={radiationConfig.omegaPoints} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaPoints: event.target.value }))} /></label><label className="field"><span className="field-label">ell min</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={radiationConfig.greybodyEllMin != null ? radiationConfig.greybodyEllMin : radiationConfig.greybodyEll} onChange={(event) => setRadiationConfig((current) => ({ ...current, greybodyEllMin: event.target.value }))} /></label><label className="field"><span className="field-label">ell max</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={radiationConfig.greybodyEllMax != null ? radiationConfig.greybodyEllMax : radiationConfig.greybodyEll} onChange={(event) => setRadiationConfig((current) => ({ ...current, greybodyEllMax: event.target.value }))} /></label><div className="summary-card radiation-order-card"><span>Main WKB order</span><strong>{config.mainOrder}</strong></div></div>{greybodyError && <div className="warning-box">{greybodyError}</div>}{!displayedGreybodyResult ? <div className="empty-panel">Run the greybody solver to generate transmission profiles for fixed ell or ell ranges.</div> : <div className="section-card radiation-chart-card full-width-card"><div className="section-head"><div><h3>Greybody profile</h3></div></div><div className="chart-area-fixed"><GreybodyChart data={radiationGreybodyData} /></div></div>}</div>}{radiationTab === "hawking" && <div className="radiation-pane"><div className="card-head card-head-split"><div><h3>Hawking radiation</h3></div><div className="card-head-tools"><button type="button" className="ghost-button compact-button" disabled={!hawkingResult} onClick={exportHawking}>Export Hawking CSV</button><button type="button" className="primary-button" onClick={onRunHawking}>Compute Hawking Radiation</button></div></div><div className="radiation-controls-grid"><label className="field"><span className="field-label">omega min</span><input type="text" value={radiationConfig.omegaMin} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMin: event.target.value }))} /></label><label className="field"><span className="field-label">omega max</span><input type="text" value={radiationConfig.omegaMax} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMax: event.target.value }))} /></label><label className="field"><span className="field-label">Frequency points</span><input type="number" min="25" step="2" value={radiationConfig.omegaPoints} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaPoints: event.target.value }))} /></label><label className="field"><span className="field-label">ell cutoff</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={radiationConfig.ellCutoff} onChange={(event) => setRadiationConfig((current) => ({ ...current, ellCutoff: event.target.value }))} /></label><div className="summary-card radiation-order-card"><span>Main WKB order</span><strong>{config.mainOrder}</strong></div></div>{hawkingError && <div className="warning-box">{hawkingError}</div>}{!hawkingResult ? <div className="empty-panel">Run the Hawking solver to build the summed radiation spectrum.</div> : <div className="section-card radiation-chart-card full-width-card"><div className="section-head"><div><h3>Hawking spectrum</h3></div></div><div className="chart-area-fixed"><HawkingSpectrumChart data={radiationSpectrumData} /></div></div>}</div>}</div></div></div>;
+      const metricTab = <div className="metric-section section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div className="section-copy"><h3>Metric Definition</h3><p>Choose a preset and edit the metric functions used across all solvers.</p></div></div><div className="metric-block"><label className="field"><span className="field-label">Preset</span><select value={config.presetKey} onChange={(event) => onPreset(event.target.value)}>{Object.entries(presets).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</select></label><label className="toggle-inline metric-toggle-top"><input type="checkbox" checked={config.sameMetric} onChange={(event) => updateConfig({ sameMetric: event.target.checked, presetKey: "custom" })} /><span>Mirror g(r) from f(r)</span></label><div className="formula-grid-react"><MetricInputCard title="f(r)" description="Primary metric function used for the horizon and potential setup." disabled={false} preview={metric.fPreview} onOpenEditor={() => openFormulaEditor("fExpression")} editorDisabled={false} primary /><div>{config.sameMetric ? <DerivedMetricCard preview={metric.gPreview} onUnlock={() => updateConfig({ sameMetric: false, presetKey: "custom" })} /> : <MetricInputCard title="g(r)" description="Independent radial component of the metric." disabled={false} preview={metric.gPreview} onOpenEditor={() => openFormulaEditor("gExpression")} editorDisabled={false} />}</div></div></div></div></div>;
+      const parametersTab = <div className="section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div className="section-copy"><h3>Parameters</h3><p>Define fixed values or parameter scans detected from the current metric.</p></div></div>{metric.error ? <div className="empty-state">Fix the metric expressions to detect parameters.</div> : metric.names.length ? <div className="parameter-editor-grid">{metric.names.map((name) => { const spec = parameterSpecs[name] || defaultSpec; const range = spec.mode === "range"; return <div key={name} className="parameter-row-react"><div className="parameter-row-react-head"><div className="parameter-name">{name}</div><select value={spec.mode} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, mode: event.target.value } }))}><option value="value">Fixed value</option><option value="range">Range</option></select></div><div className={`parameter-controls-grid${range ? "" : " compact"}`}>{!range && <label className="field"><span className="field-label">Value</span><input type="text" value={spec.value || ""} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, value: event.target.value } }))} /></label>}{range && <><label className="field"><span className="field-label">Start</span><input type="text" value={spec.start || ""} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, start: event.target.value } }))} /></label><label className="field"><span className="field-label">End</span><input type="text" value={spec.end || ""} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, end: event.target.value } }))} /></label><label className="field"><span className="field-label">Points</span><input type="number" min="2" step="1" value={spec.count || 5} onChange={(event) => setParameterSpecs((current) => ({ ...current, [name]: { ...spec, count: Number(event.target.value) } }))} /></label></>}</div></div>; })}</div> : <div className="empty-state">No parameters other than r were detected.</div>}</div></div>;
+      const wkbSettingsTab = <div className="section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div className="section-copy"><h3>WKB Settings</h3><p>Choose perturbation settings and the approximation order used by the solver.</p></div></div><div className="field-group wkb-primary-grid"><label className="field field-span-full"><span className="field-label">Perturbation</span><select value={config.perturbationType} onChange={(event) => updateConfig({ perturbationType: event.target.value, presetKey: "custom" })}><option value="scalar">Scalar field</option><option value="electromagnetic">Electromagnetic field</option></select></label><label className="field"><span className="field-label">ell</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={config.ell} onChange={(event) => updateConfig({ ell: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Max overtone N</span><input type="number" min="0" step="1" value={config.overtoneMax} onChange={(event) => updateConfig({ overtoneMax: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group wkb-secondary-grid"><label className="field"><span className="field-label">Main WKB order</span><input type="number" min="1" max="16" step="1" value={config.mainOrder} onChange={(event) => updateConfig({ mainOrder: event.target.value, presetKey: "custom" })} /></label></div></div></div>;
+      const numericsTab = <div className="numeric-section section-card sidebar-panel"><div className="section-scroll"><div className="section-head"><div className="section-copy"><h3>Numerics</h3><p>Control precision, search windows, and worker settings for heavier computations.</p></div></div><div className="field-group three-columns"><label className="field"><span className="field-label">Decimal precision</span><input type="number" min="40" step="1" value={config.precision} onChange={(event) => updateConfig({ precision: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Chebyshev nodes</span><input type="number" min="32" max="160" step="2" value={config.spectralNodes} onChange={(event) => updateConfig({ spectralNodes: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Plot samples</span><input type="number" min="101" max="1201" step="20" value={config.plotSamples} onChange={(event) => updateConfig({ plotSamples: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group three-columns"><label className="field"><span className="field-label">Search r_min</span><input type="text" value={config.rMin} onChange={(event) => updateConfig({ rMin: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Search r_max</span><input type="text" value={config.rMax} onChange={(event) => updateConfig({ rMax: event.target.value, presetKey: "custom" })} /></label><label className="field"><span className="field-label">Horizon scan points</span><input type="number" min="160" step="40" value={config.horizonSamples} onChange={(event) => updateConfig({ horizonSamples: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group"><label className="field"><span className="field-label">Peak scan points</span><input type="number" min="400" step="100" value={config.peakSamples} onChange={(event) => updateConfig({ peakSamples: event.target.value, presetKey: "custom" })} /></label></div><div className="field-group"><label className="field checkbox-field checkbox-card"><input type="checkbox" checked={!!config.parallelRadiation} onChange={(event) => updateConfig({ parallelRadiation: event.target.checked, presetKey: "custom" })} /><span>Enable parallel workers for all supported computations</span></label><label className="field"><span className="field-label">Parallel workers</span><input type="number" min="1" max="16" step="1" disabled={!config.parallelRadiation} value={config.parallelRadiationWorkers} onChange={(event) => updateConfig({ parallelRadiationWorkers: event.target.value, presetKey: "custom" })} /></label></div></div></div>;
+const radiationView = <div className="workspace-view workspace-radiation-view">
+  <div className="tab-bar">
+    <button type="button" className={`tab-button${radiationTab === "greybody" ? " active" : ""}`} onClick={() => setRadiationTab("greybody")}>Greybody</button>
+    <button type="button" className={`tab-button${radiationTab === "hawking" ? " active" : ""}`} onClick={() => setRadiationTab("hawking")}>Hawking Radiation</button>
+  </div>
+  <div className="tab-panel">
+    <div className="tab-panel-inner">
+      {radiationTab === "greybody" && <div className="radiation-pane">
+        <div className="card-head card-head-split">
+          <div><h3>Greybody factors</h3></div>
+          <div className="card-head-tools">
+            <button type="button" className="ghost-button compact-button" onClick={openGreybodyCompareWindow}>Compare Orders</button>
+            <button type="button" className="ghost-button compact-button" disabled={!displayedGreybodyResult} onClick={exportGreybody}>Export Greybody CSV</button>
+            <button type="button" className="primary-button" onClick={onRunGreybody}>Compute Greybody</button>
+          </div>
+        </div>
+        <div className="radiation-controls-grid">
+          <label className="field"><span className="field-label">omega min</span><input type="text" value={radiationConfig.omegaMin} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMin: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">omega max</span><input type="text" value={radiationConfig.omegaMax} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMax: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">Frequency points</span><input type="number" min="25" step="2" value={radiationConfig.omegaPoints} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaPoints: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">ell min</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={radiationConfig.greybodyEllMin != null ? radiationConfig.greybodyEllMin : radiationConfig.greybodyEll} onChange={(event) => setRadiationConfig((current) => ({ ...current, greybodyEllMin: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">ell max</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={radiationConfig.greybodyEllMax != null ? radiationConfig.greybodyEllMax : radiationConfig.greybodyEll} onChange={(event) => setRadiationConfig((current) => ({ ...current, greybodyEllMax: event.target.value }))} /></label>
+          <div className="summary-card radiation-order-card"><span>Main WKB order</span><strong>{config.mainOrder}</strong></div>
+        </div>
+        {greybodyError && <div className="warning-box">{greybodyError}</div>}
+        {!displayedGreybodyResult ? <div className="empty-panel">Run the greybody solver to generate transmission profiles for fixed ell or ell ranges.</div> : <div className="section-card radiation-chart-card full-width-card"><div className="section-head"><div><h3>Greybody profile</h3></div></div><div className="chart-area-fixed"><GreybodyChart data={radiationGreybodyData} /></div></div>}
+      </div>}
+      {radiationTab === "hawking" && <div className="radiation-pane">
+        <div className="card-head card-head-split">
+          <div><h3>Hawking radiation</h3></div>
+          <div className="card-head-tools">
+            <button type="button" className="ghost-button compact-button" disabled={!hawkingResult} onClick={exportHawking}>Export Hawking CSV</button>
+            <button type="button" className="primary-button" onClick={onRunHawking}>Compute Hawking Radiation</button>
+          </div>
+        </div>
+        <div className="radiation-controls-grid">
+          <label className="field"><span className="field-label">omega min</span><input type="text" value={radiationConfig.omegaMin} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMin: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">omega max</span><input type="text" value={radiationConfig.omegaMax} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaMax: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">Frequency points</span><input type="number" min="25" step="2" value={radiationConfig.omegaPoints} onChange={(event) => setRadiationConfig((current) => ({ ...current, omegaPoints: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">ell cutoff</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={radiationConfig.ellCutoff} onChange={(event) => setRadiationConfig((current) => ({ ...current, ellCutoff: event.target.value }))} /></label>
+          <div className="summary-card radiation-order-card"><span>Main WKB order</span><strong>{config.mainOrder}</strong></div>
+        </div>
+        {hawkingError && <div className="warning-box">{hawkingError}</div>}
+        {!hawkingResult ? <div className="empty-panel">Run the Hawking solver to build the summed radiation spectrum.</div> : <div className="section-card radiation-chart-card full-width-card"><div className="section-head"><div><h3>Hawking spectrum</h3></div></div><div className="chart-area-fixed"><HawkingSpectrumChart data={radiationSpectrumData} /></div></div>}
+      </div>}
+    </div>
+  </div>
+</div>;
       const diagnosticsView = <div className="workspace-view workspace-diagnostics-view"><div className="tab-panel diagnostics-panel"><div className="tab-panel-inner"><div className="diagnostic-stack">{!!allDiagnosticsWarnings.length && <WarningStack warnings={allDiagnosticsWarnings} />}{!!diagnosticsEntries.length && <div className="diagnostic-grid">{diagnosticsEntries.map((item) => <div key={`${item.label}-${item.value}`} className="summary-card"><span>{item.label}</span><strong>{item.value}</strong></div>)}</div>}{!result && !analysisResult && !greybodyResult && !hawkingResult && <div className="empty-panel">Diagnostics will appear after a successful computation.</div>}</div></div></div></div>;
       return <div className="react-shell">
         <header className="topbar">
-          <div className="topbar-title"><div className="topbar-title-row"><h1>WKBpackage</h1><button type="button" className="title-icon-button" title="Open references and credits" onClick={() => { setWindowPositions((current) => ({ ...current, references: defaultWindowPositions().references })); setReferencesOpen(true); }}>i</button></div></div>
+          <div className="topbar-title"><div className="topbar-title-row"><h1>WKBpackage</h1><button type="button" className="title-icon-button" title="Open references and credits" onClick={() => { setWindowPositions((current) => ({ ...current, references: defaultWindowPositions().references })); setReferencesOpen(true); }}>i</button></div><p>Higher-order WKB workspace for quasinormal modes, effective potentials, greybody factors, and Hawking radiation.</p></div>
           <div className="topbar-actions">
               <div className="status-cluster">
+                <div className="status-kicker">Computation status</div>
                 <div className="status-line">{globalStatusDisplay.status}</div>
                 <div className="progress-wrap compact-progress">
                   <div className="progress-track"><div className="progress-bar" style={{ width: `${globalStatusDisplay.progressValue}%` }} /></div>
@@ -1252,8 +2125,8 @@ const radiationView = <div className="workspace-view workspace-radiation-view"><
               <div className="card workspace-card">
                 <div className="workspace-primary-tabs">
                   <button type="button" className={`tab-button${workspaceTab === "table" ? " active" : ""}`} onClick={() => setWorkspaceTab("table")}>QNMs</button>
-                  <button type="button" className={`tab-button${workspaceTab === "analysis" ? " active" : ""}`} onClick={() => setWorkspaceTab("analysis")}>Mics</button>
-                  <button type="button" className={`tab-button${workspaceTab === "radiation" ? " active" : ""}`} onClick={() => setWorkspaceTab("radiation")}>Radiation & Greybody</button>
+                  <button type="button" className={`tab-button${workspaceTab === "analysis" ? " active" : ""}`} onClick={() => setWorkspaceTab("analysis")}>Analysis</button>
+                  <button type="button" className={`tab-button${workspaceTab === "radiation" ? " active" : ""}`} onClick={() => setWorkspaceTab("radiation")}>Radiation</button>
                   <button type="button" className={`tab-button${workspaceTab === "diagnostics" ? " active" : ""}`} onClick={() => setWorkspaceTab("diagnostics")}>Diagnostics</button>
                 </div>
                 <div className="workspace-panel">
@@ -1271,10 +2144,10 @@ const radiationView = <div className="workspace-view workspace-radiation-view"><
                       {isSingleScan && <button type="button" className={`tab-button${activeTab === "modes" ? " active" : ""}`} onClick={() => setActiveTab("modes")}>Mode Curves</button>}
                     </div>
                     <div className="tabs-toolbar">
-                      <div className="toolbar-cluster"><button type="button" className="primary-button" onClick={onRunAnalysis}>Compute Potential and Solution</button>{isSingleScan && activeTab === "modes" && <><button type="button" className={`ghost-button compact-button${modeSource === "wkb" ? " is-active" : ""}`} onClick={() => setModeSource("wkb")}>WKB</button><button type="button" className={`ghost-button compact-button${modeSource === "pade" ? " is-active" : ""}`} onClick={() => setModeSource("pade")}>Pade</button></>}</div>
+                      <div className="toolbar-cluster"><button type="button" className="primary-button" onClick={onRunAnalysis}>Compute Potential and Solution</button>{analysisCurveControlAvailable && activeTab !== "modes" && <button type="button" className={`ghost-button compact-button${analysisCurveManagerOpen ? " is-active" : ""}`} onClick={openAnalysisCurveManager}>{analysisCurveManagerNeeded ? `Curves (${visibleAnalysisCaseIndices.length}/${analysisCases.length})` : "Curves"}</button>}{isSingleScan && activeTab === "modes" && <><button type="button" className={`ghost-button compact-button${modeSource === "wkb" ? " is-active" : ""}`} onClick={() => setModeSource("wkb")}>WKB</button><button type="button" className={`ghost-button compact-button${modeSource === "pade" ? " is-active" : ""}`} onClick={() => setModeSource("pade")}>Pade</button></>}</div>
                     </div>
                     {analysisError && <div className="warning-box">{analysisError}</div>}
-                    <div className="tab-panel"><div className="tab-panel-inner">{activeTab === "potential" && (!analysisPlotData ? <div className="empty-panel action-empty-panel"><div>Potential profiles will appear after analysis.</div><button type="button" className="primary-button" onClick={onRunAnalysis}>Compute Potential and Solution</button></div> : <PotentialChart plot={analysisPlotData} />)}{activeTab === "solution" && (!analysisPlotData ? <div className="empty-panel action-empty-panel"><div>Run analysis to generate the metric-function graph.</div><button type="button" className="primary-button" onClick={onRunAnalysis}>Compute Potential and Solution</button></div> : <MetricChart plot={analysisPlotData} />)}{activeTab === "modes" && isSingleScan && <ScanChart data={scanChartData} />}</div></div>
+                    <div className="tab-panel"><div className="tab-panel-inner">{activeTab === "potential" && (!analysisPlotData ? <div className="empty-panel action-empty-panel"><div className="empty-panel-copy"><strong>Potential profile not generated yet.</strong><span>Use the action above to build the effective potential and related diagnostic curves for the current configuration.</span></div></div> : <PotentialChart plot={analysisPlotData} />)}{activeTab === "solution" && (!analysisPlotData ? <div className="empty-panel action-empty-panel"><div className="empty-panel-copy"><strong>Metric functions are not available yet.</strong><span>Run the analysis once to render the current f(r) and g(r) profiles in this workspace.</span></div></div> : <MetricChart plot={analysisPlotData} />)}{activeTab === "modes" && isSingleScan && <ScanChart data={scanChartData} />}</div></div>
                   </div>}
                   {workspaceTab === "radiation" && radiationView}
                   {workspaceTab === "diagnostics" && diagnosticsView}
@@ -1284,7 +2157,9 @@ const radiationView = <div className="workspace-view workspace-radiation-view"><
           </section>
         </div>
         <div className="drawer-layer">{selectedRow && <div className="drawer-backdrop" onClick={() => setSelectedRowIndex(null)} /> }<div className={`mode-drawer${selectedRow ? "" : " closed"}`} style={windowPositions.mode}>{selectedRow && <><div className="mode-drawer-head window-drag-handle" onMouseDown={(event) => beginWindowDrag("mode", event)}><div><h3>{`Mode n = ${selectedRow.overtone.n}`}</h3><p>{formatComplexInline(selectedRow.overtone.main)}</p></div><div className="window-actions"><button type="button" className="ghost-button compact-button" onClick={(event) => { event.stopPropagation(); setSelectedRowIndex(null); }}>Close</button></div></div><div className="drawer-tab-bar"><button type="button" className={`tab-button${drawerTab === "orders" ? " active" : ""}`} onClick={() => setDrawerTab("orders")}>Orders</button><button type="button" className={`tab-button${drawerTab === "pade" ? " active" : ""}`} onClick={() => setDrawerTab("pade")}>Pade</button><button type="button" className={`tab-button${drawerTab === "plot" ? " active" : ""}`} onClick={() => setDrawerTab("plot")}>Plot</button></div><div className="drawer-body"><div className="drawer-scroll">{drawerTab === "orders" && <div className="table-wrap"><table><thead><tr><th>Method</th><th>omega</th><th>Relative drift</th></tr></thead><tbody>{selectedRow.caseData.orders.map((order) => <tr key={order}><td>{`WKB ${order}`}</td><td>{formatComplexInline(selectedRow.overtone.orders[order])}</td><td>{formatRelative(selectedRow.overtone.orderAccuracy[order])}</td></tr>)}</tbody></table></div>}{drawerTab === "pade" && (!(selectedRow.overtone.pade && selectedRow.overtone.pade.length) ? <div className="empty-panel">No Pade values are available for this mode.</div> : <div className="table-wrap"><table><thead><tr><th>Method</th><th>omega</th><th>Relative drift</th></tr></thead><tbody>{selectedRow.overtone.pade.map((item) => <tr key={item.label}><td>{item.label}</td><td>{formatComplexInline(item.value)}</td><td>{formatRelative(item.relativeToMain)}</td></tr>)}</tbody></table></div>)}{drawerTab === "plot" && (orderChartData ? <OrderChart data={orderChartData} /> : <div className="empty-panel">Could not build the WKB-order plot.</div>)}</div></div></>}</div></div>
-        <FormulaEditorModal open={formulaEditor.open} fieldLabel={formulaEditor.field === "gExpression" ? "g(r)" : "f(r)"} draft={formulaEditor.draft} preview={formulaEditorPreview} inputRef={editorInputRef} onDraftChange={(value) => setFormulaEditor((current) => ({ ...current, draft: value }))} onOpenHelp={() => { setWindowPositions((current) => ({ ...current, help: defaultWindowPositions().help })); setHelpOpen(true); }} onApply={applyFormulaEditor} onClose={closeFormulaEditor} windowStyle={windowPositions.editor} onMouseDownHeader={(event) => beginWindowDrag("editor", event)} />
+<FormulaEditorModal open={formulaEditor.open} fieldLabel={formulaEditor.field === "gExpression" ? "g(r)" : "f(r)"} draft={formulaEditor.draft} preview={formulaEditorPreview} inputRef={editorInputRef} onDraftChange={(value) => setFormulaEditor((current) => ({ ...current, draft: value }))} onOpenHelp={() => { setWindowPositions((current) => ({ ...current, help: defaultWindowPositions().help })); setHelpOpen(true); }} onApply={applyFormulaEditor} onClose={closeFormulaEditor} windowStyle={windowPositions.editor} onMouseDownHeader={(event) => beginWindowDrag("editor", event)} />
+{analysisCurveManagerOpen && analysisCurveControlAvailable && workspaceTab === "analysis" && activeTab !== "modes" && <div className="floating-window-layer"><div className="analysis-curve-manager-card" style={windowPositions.analysisCurveManager} onClick={(event) => event.stopPropagation()}><div className="mode-drawer-head window-drag-handle" onMouseDown={(event) => beginWindowDrag("analysisCurveManager", event)}><div><h3>Visible Curves</h3><p>Click any curve to add or remove it. When the slider is available, the current slider preview always stays visible.</p></div><div className="window-actions"><button type="button" className="ghost-button compact-button" onClick={() => setAnalysisCurveSelection(analysisSliderData ? [] : [analysisCases[0].caseIndex])}>{analysisSliderData ? "Only Slider" : "Single Curve"}</button><button type="button" className="ghost-button compact-button" onClick={() => setAnalysisCurveSelection(analysisCases.map((item) => item.caseIndex))}>Show All</button><button type="button" className="ghost-button compact-button" onClick={closeAnalysisCurveManager}>Close</button></div></div><div className="analysis-curve-manager-body">{analysisSliderData && analysisSliderEntry && <div className="analysis-curve-slider-card"><div className="analysis-curve-slider-head"><strong>Slider preview</strong><span>{`${analysisSliderData.parameterName} = ${compactNumber(analysisSliderEntry.value)}`}</span></div><input className="analysis-curve-slider-range" type="range" min="0" max={Math.max(0, analysisSliderData.entries.length - 1)} step="1" value={analysisCurveSliderPosition} onChange={(event) => setAnalysisCurveSliderPosition(Number(event.target.value))} /><div className="analysis-curve-slider-meta"><span>{compactNumber(analysisSliderData.entries[0].value)}</span><span>{analysisSliderData.parameterName}</span><span>{compactNumber(analysisSliderData.entries[analysisSliderData.entries.length - 1].value)}</span></div></div>}<div className="analysis-curve-manager-toolbar"><span className="analysis-curve-manager-count">{`Showing ${visibleAnalysisCaseIndices.length} of ${analysisCases.length} scanned cases`}</span></div><div className="analysis-curve-list">{analysisCurveEntries.map((item) => { const isPinned = pinnedAnalysisCaseSet.has(item.caseIndex); const isPreview = analysisSliderCaseIndex === item.caseIndex; const isVisible = visibleAnalysisCaseSet.has(item.caseIndex); return <button key={item.caseIndex} type="button" className={`analysis-curve-list-button${isVisible ? " is-active" : ""}${isPreview ? " is-preview" : ""}`} onClick={() => toggleAnalysisCurveSelection(item.caseIndex)}><div className="analysis-curve-list-head"><div className="analysis-curve-swatch-row"><span className="analysis-curve-swatch" style={{ background: chartColor(config.sameMetric ? item.caseIndex : item.caseIndex * 2) }} />{!config.sameMetric && <span className="analysis-curve-swatch" style={{ background: chartColor(item.caseIndex * 2 + 1) }} />}</div><div className="analysis-curve-list-meta">{isPreview && <span>slider</span>}{isPinned && <span>selected</span>}{!isPinned && !isPreview && isVisible && <span>visible</span>}</div></div><div className="analysis-curve-list-title">{item.label}</div></button>; })}</div></div></div></div>}
+{greybodyCompareOpen && <div className="help-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) closeGreybodyCompareWindow(); }}><div className="greybody-compare-card" style={windowPositions.greybodyCompare} onClick={(event) => event.stopPropagation()}><div className="mode-drawer-head window-drag-handle" onMouseDown={(event) => beginWindowDrag("greybodyCompare", event)}><div><h3>Greybody WKB Order Comparison</h3><p>Compute the greybody factor between two WKB orders for one ell and compare everything to the highest valid order.</p></div><div className="window-actions"><button type="button" className="primary-button" onClick={(event) => { event.stopPropagation(); runGreybodyOrderComparison(); }}>Compute</button><button type="button" className="ghost-button compact-button" onClick={(event) => { event.stopPropagation(); closeGreybodyCompareWindow(); }}>Close</button></div></div><div className="greybody-compare-scroll"><div className="greybody-compare-controls"><label className="field"><span className="field-label">ell</span><input type="number" min={config.perturbationType === "electromagnetic" ? 1 : 0} step="1" value={greybodyCompareSettings.ell} onChange={(event) => setGreybodyCompareSettings((current) => ({ ...current, ell: event.target.value }))} /></label><label className="field"><span className="field-label">Order from</span><input type="number" min="1" max={maxAvailableWkbOrder} step="1" value={greybodyCompareSettings.orderMin} onChange={(event) => setGreybodyCompareSettings((current) => ({ ...current, orderMin: event.target.value }))} /></label><label className="field"><span className="field-label">Order to</span><input type="number" min="1" max={maxAvailableWkbOrder} step="1" value={greybodyCompareSettings.orderMax} onChange={(event) => setGreybodyCompareSettings((current) => ({ ...current, orderMax: event.target.value }))} /></label><div className="summary-card radiation-order-card"><span>Current main order</span><strong>{config.mainOrder}</strong></div></div><div className="greybody-compare-status"><strong>{greybodyCompareStatus}</strong><span>{greybodyCompareProgressValue}%</span></div>{greybodyCompareError && <div className="warning-box">{greybodyCompareError}</div>}{!!greybodyCompareWarnings.length && <WarningStack warnings={greybodyCompareWarnings} />}{!greybodyCompareResult ? <div className="empty-panel">Run the comparison to build one plot with all requested orders and another with the differences relative to the highest valid order.</div> : <div className="greybody-compare-chart-stack"><div className="section-card radiation-chart-card full-width-card"><div className="section-head"><div><h3>All requested orders</h3></div></div><div className="chart-area-fixed"><GreybodyOrderSweepChart data={greybodyOrderSweepData} /></div></div><div className="section-card radiation-chart-card full-width-card"><div className="section-head"><div><h3>{`Difference relative to WKB ${greybodyCompareResult.referenceOrder}`}</h3></div></div><div className="chart-area-fixed"><GreybodyOrderDifferenceChart data={greybodyOrderDifferenceData} /></div></div></div>}</div></div></div>}
         {helpOpen && <div className="help-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setHelpOpen(false); }}><div className="help-modal-card" style={windowPositions.help} onClick={(event) => event.stopPropagation()}><div className="mode-drawer-head window-drag-handle" onMouseDown={(event) => beginWindowDrag("help", event)}><div><h3>Formula Help</h3><p>Supported analytic functions, constants, and LaTeX fragments for the metric editor.</p></div><div className="window-actions"><button type="button" className="ghost-button compact-button" onClick={(event) => { event.stopPropagation(); setHelpOpen(false); }}>Close</button></div></div><div className="help-grid-scroll"><div className="help-grid">{helpItems.map((item) => <div key={item[0]} className="help-item"><code>{item[0]}</code><div>{item[1]}</div></div>)}</div><div className="help-subsection"><h4>LaTeX paste examples</h4><div className="latex-example-list static">{latexExamples.map((example) => <div key={example} className="help-item latex-example-card"><code>{example}</code></div>)}</div></div></div></div></div>}
         {referencesOpen && <div className="help-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setReferencesOpen(false); }}><div className="help-modal-card references-modal-card" style={windowPositions.references} onClick={(event) => event.stopPropagation()}><div className="mode-drawer-head window-drag-handle" onMouseDown={(event) => beginWindowDrag("references", event)}><div><h3>References</h3></div><div className="window-actions"><button type="button" className="ghost-button compact-button" onClick={(event) => { event.stopPropagation(); setReferencesOpen(false); }}>Close</button></div></div><div className="help-grid-scroll"><div className="reference-credits">{referenceCredits.map((item) => <p key={item}>{item}</p>)}</div><div className="reference-list modal-reference-list">{referenceItems.map((item) => <a key={item.href} className="reference-item" href={item.href} target="_blank" rel="noreferrer"><strong>{item.title}</strong><span>{item.meta}</span></a>)}</div></div></div></div>}
       </div>;

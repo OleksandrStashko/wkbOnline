@@ -113,12 +113,34 @@
     return best;
   }
 
+  function nearestFiniteIndex(xValues, yValues, target) {
+    let best = -1;
+    let distance = Infinity;
+    for (let index = 0; index < xValues.length; index += 1) {
+      if (!Number.isFinite(xValues[index]) || !Number.isFinite(yValues[index])) {
+        continue;
+      }
+      const current = Math.abs(xValues[index] - target);
+      if (current < distance) {
+        distance = current;
+        best = index;
+      }
+    }
+    return best;
+  }
+
   function renderLineChart(container, config) {
-    const width = 980;
-    const height = 380;
-    const margin = config.compact ? { top: 18, right: 22, bottom: 58, left: 92 } : { top: 30, right: 28, bottom: 64, left: 110 };
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
+    const containerWidth = Math.max(360, Math.min(980, Math.round(container.clientWidth || 980)));
+    const compactLayout = containerWidth < 760;
+    const width = containerWidth;
+    const height = Number.isFinite(config.height) ? config.height : compactLayout ? 328 : containerWidth < 980 ? 352 : 380;
+    const margin = config.compact
+      ? compactLayout ? { top: 16, right: 16, bottom: 52, left: 68 } : { top: 18, right: 22, bottom: 58, left: 92 }
+      : compactLayout ? { top: 22, right: 18, bottom: 56, left: 78 } : { top: 30, right: 28, bottom: 64, left: 110 };
+    const innerWidth = Math.max(140, width - margin.left - margin.right);
+    const innerHeight = Math.max(140, height - margin.top - margin.bottom);
+    const outerRadius = compactLayout ? 14 : 18;
+    const clipRadius = compactLayout ? 10 : 12;
     const normalizedSeries = config.series.map((item) => ({
       ...item,
       xValues: item.xValues || config.x || []
@@ -214,13 +236,21 @@
       });
     };
 
-    const buildPath = (series) =>
-      series.xValues
-        .map((xValue, pointIndex) => {
-          const yValue = series.values[pointIndex];
-          return `${pointIndex === 0 ? "M" : "L"} ${xScale(xValue).toFixed(2)} ${yScale(yValue).toFixed(2)}`;
-        })
-        .join(" ");
+    const buildPath = (series) => {
+      let path = "";
+      let drawing = false;
+      for (let pointIndex = 0; pointIndex < series.xValues.length; pointIndex += 1) {
+        const xValue = series.xValues[pointIndex];
+        const yValue = series.values[pointIndex];
+        if (!Number.isFinite(xValue) || !Number.isFinite(yValue)) {
+          drawing = false;
+          continue;
+        }
+        path += `${drawing ? " L" : "M"} ${xScale(xValue).toFixed(2)} ${yScale(yValue).toFixed(2)}`;
+        drawing = true;
+      }
+      return path.trim();
+    };
 
     const updateTooltip = (xValue, clientX, clientY) => {
       const visibleSeries = normalizedSeries.filter((_, seriesIndex) => visibility[seriesIndex]);
@@ -231,7 +261,10 @@
       const lines = visibleSeries
         .slice(0, 8)
         .map((series) => {
-          const index = nearestIndex(series.xValues, xValue);
+          const index = nearestFiniteIndex(series.xValues, series.values, xValue);
+          if (index < 0) {
+            return "";
+          }
           return `<div><span class="tooltip-key">${escapeHtml(series.label)}</span><strong>${formatTick(series.values[index])}</strong></div>`;
         })
         .join("");
@@ -270,7 +303,10 @@
             if (!visibility[seriesIndex] || !series.xValues.length) {
               return "";
             }
-            const index = nearestIndex(series.xValues, activeXValue);
+            const index = nearestFiniteIndex(series.xValues, series.values, activeXValue);
+            if (index < 0) {
+              return "";
+            }
             return `<circle class="chart-point" cx="${xScale(series.xValues[index]).toFixed(2)}" cy="${yScale(series.values[index]).toFixed(2)}" r="4.5" fill="${series.color}"></circle>`;
           })
           .join("");
@@ -281,10 +317,10 @@
         resetButton.classList.toggle("hidden", isResetView);
       }
       svg.innerHTML = `
-        <rect x="0" y="0" width="${width}" height="${height}" rx="18" fill="rgba(255,255,255,0.42)"></rect>
+        <rect x="0" y="0" width="${width}" height="${height}" rx="${outerRadius}" fill="rgba(255,255,255,0.42)"></rect>
         <defs>
           <clipPath id="${clipId}">
-            <rect x="${margin.left}" y="${margin.top}" width="${innerWidth}" height="${innerHeight}" rx="12"></rect>
+            <rect x="${margin.left}" y="${margin.top}" width="${innerWidth}" height="${innerHeight}" rx="${clipRadius}"></rect>
           </clipPath>
         </defs>
         ${xTicks
@@ -490,6 +526,7 @@
       xLabel: "r",
       yLabel: "Metric functions",
       ariaLabel: "Metric functions versus radius",
+      showLegend: plotData.showLegend,
       robustRange: true,
       compact: true,
       initialYMin: -1,
@@ -529,6 +566,7 @@
       xLabel: "r",
       yLabel: "V(r)",
       ariaLabel: "Effective potential plot",
+      showLegend: plotData.showLegend,
       robustRange: true,
       compact: true
     });
@@ -612,7 +650,7 @@
         values: curve.values.map((value) => Number(value)),
         color: curve.ell === data.selectedEll ? "#a33f2f" : palette(index)
       }))
-      .filter((item) => item.values.every(Number.isFinite));
+      .filter((item) => item.values.some(Number.isFinite));
     if (!x.every(Number.isFinite) || !series.length) {
       container.className = "chart-wrap empty-state";
       container.textContent = "Greybody curves contain invalid numbers.";
@@ -625,6 +663,69 @@
       xLabel: "omega",
       yLabel: "T_l(omega)",
       ariaLabel: "Greybody factors versus frequency"
+    });
+  }
+
+  function renderGreybodyOrderSweepChart(container, data) {
+    if (!data || !data.x || !data.curves || !data.curves.length) {
+      container.className = "chart-wrap empty-state";
+      container.textContent = "Greybody order-comparison curves are not available.";
+      return;
+    }
+    const x = data.x.map((value) => Number(value));
+    const series = data.curves
+      .map((curve, index) => ({
+        label: curve.label || `WKB ${curve.order}`,
+        values: curve.values.map((value) => Number(value)),
+        color: curve.order === data.referenceOrder ? "#a33f2f" : palette(index)
+      }))
+      .filter((item) => item.values.some(Number.isFinite));
+    if (!x.every(Number.isFinite) || !series.length) {
+      container.className = "chart-wrap empty-state";
+      container.textContent = "Greybody order-comparison curves contain invalid numbers.";
+      return;
+    }
+    renderLineChart(container, {
+      title: `Greybody factors for WKB orders ${data.curves[0].order} through ${data.curves[data.curves.length - 1].order}`,
+      x,
+      series,
+      xLabel: "omega",
+      yLabel: "T(omega)",
+      ariaLabel: "Greybody factors versus frequency for several WKB orders"
+    });
+  }
+
+  function renderGreybodyOrderDifferenceChart(container, data) {
+    if (!data || !data.x || !data.curves) {
+      container.className = "chart-wrap empty-state";
+      container.textContent = "Greybody order-difference curves are not available.";
+      return;
+    }
+    if (!data.curves.length) {
+      container.className = "chart-wrap empty-state";
+      container.textContent = "At least two physical WKB orders are required to draw order differences.";
+      return;
+    }
+    const x = data.x.map((value) => Number(value));
+    const series = data.curves
+      .map((curve, index) => ({
+        label: curve.label || `WKB ${data.referenceOrder} - WKB ${curve.order}`,
+        values: curve.values.map((value) => Number(value)),
+        color: palette(index)
+      }))
+      .filter((item) => item.values.some(Number.isFinite));
+    if (!x.every(Number.isFinite) || !series.length) {
+      container.className = "chart-wrap empty-state";
+      container.textContent = "Greybody order-difference curves contain invalid numbers.";
+      return;
+    }
+    renderLineChart(container, {
+      title: `Difference relative to WKB ${data.referenceOrder}`,
+      x,
+      series,
+      xLabel: "omega",
+      yLabel: "Delta T(omega)",
+      ariaLabel: "Difference between the highest valid WKB order and lower orders"
     });
   }
 
@@ -645,7 +746,7 @@
         values: curve.values.map((value) => Number(value)),
         color: palette(index)
       }))
-    ).filter((item) => item.values.every(Number.isFinite));
+    ).filter((item) => item.values.some(Number.isFinite));
     if (!x.every(Number.isFinite) || !series.length) {
       container.className = "chart-wrap empty-state";
       container.textContent = "The Hawking spectrum contains invalid numbers.";
@@ -668,6 +769,8 @@
     renderModeScanChart,
     renderOrderTrendChart,
     renderGreybodyChart,
+    renderGreybodyOrderSweepChart,
+    renderGreybodyOrderDifferenceChart,
     renderHawkingSpectrumChart
   };
 })();

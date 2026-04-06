@@ -19,9 +19,23 @@
     }
   }
 
+  function availableWkbMaxOrder() {
+    if (App.WKBData && Number.isFinite(Number(App.WKBData.maxOrder))) {
+      return Math.max(1, Math.floor(Number(App.WKBData.maxOrder)));
+    }
+    if (App.WKBData && Array.isArray(App.WKBData.orders) && App.WKBData.orders.length) {
+      return Math.max(1, App.WKBData.orders.length);
+    }
+    return 16;
+  }
+
+  function hasAnyPhysicalTransmission(values) {
+    return (values || []).some((value) => value !== null && value !== undefined);
+  }
+
   function normalizeConfig(rawConfig) {
     const ell = Math.max(0, Math.floor(Number(rawConfig.ell)));
-    const maxOrder = Math.max(1, Math.floor(Number((App.WKBData && App.WKBData.maxOrder) || 13)));
+    const maxOrder = availableWkbMaxOrder();
     return {
       fExpression: rawConfig.fExpression,
       gExpression: rawConfig.gExpression,
@@ -29,7 +43,6 @@
       ell,
       overtoneMax: Math.max(0, Math.floor(Number(rawConfig.overtoneMax))),
       mainOrder: Math.max(1, Math.min(maxOrder, Math.floor(Number(rawConfig.mainOrder)))),
-      showAllOrders: Boolean(rawConfig.showAllOrders),
       precision: Math.max(40, Number(rawConfig.precision)),
       rMin: rawConfig.rMin,
       rMax: rawConfig.rMax,
@@ -376,6 +389,39 @@
     return perturbationType === "electromagnetic" ? 1 : 0;
   }
 
+  function normalizeGreybodyOrderComparison(rawComparison, perturbationType) {
+    const maxOrder = availableWkbMaxOrder();
+    const ellFloor = minimumEll(perturbationType);
+    const rawEll = rawComparison && rawComparison.ell != null
+      ? rawComparison.ell
+      : rawComparison && rawComparison.greybodyEll != null
+        ? rawComparison.greybodyEll
+        : ellFloor;
+    const rawOrderMin = rawComparison && rawComparison.orderMin != null ? rawComparison.orderMin : 1;
+    const rawOrderMax = rawComparison && rawComparison.orderMax != null ? rawComparison.orderMax : maxOrder;
+    const ellValue = Number(rawEll);
+    const orderMinValue = Number(rawOrderMin);
+    const orderMaxValue = Number(rawOrderMax);
+    if (!Number.isFinite(ellValue)) {
+      throw new Error("Greybody order comparison requires a finite ell value.");
+    }
+    if (!Number.isFinite(orderMinValue) || !Number.isFinite(orderMaxValue)) {
+      throw new Error("Greybody order comparison requires finite integer order bounds.");
+    }
+    const ell = Math.max(ellFloor, Math.floor(ellValue));
+    const orderMin = Math.max(1, Math.min(maxOrder, Math.floor(orderMinValue)));
+    const orderMax = Math.max(1, Math.min(maxOrder, Math.floor(orderMaxValue)));
+    if (orderMax < orderMin) {
+      throw new Error("The upper WKB order must be greater than or equal to the lower order.");
+    }
+    return {
+      ell,
+      orderMin,
+      orderMax,
+      maxOrder
+    };
+  }
+
   function prepareBarrierCase(parsed, config, params, ell, ctx, includePlot) {
     const warnings = [];
     if (config.perturbationType === "electromagnetic" && ell < 1) {
@@ -640,15 +686,28 @@
     return `[${formatParamsForWarning(params)}${ell !== undefined ? `, ell=${ell}` : ""}]`;
   }
 
-  function buildTransmissionWarnings(ctx, ell, evaluations) {
+  function buildTransmissionWarnings(ell, evaluations) {
     const warnings = [];
-    const residualThreshold = ctx.ten.pow(-Math.max(8, Math.floor(ctx.precision / 3)));
-    if (evaluations.some((item) => item.transmissionImagResidual.greaterThan(residualThreshold))) {
-      uniquePush(warnings, `[ell=${ell}] The WKB transmission coefficient has a noticeable imaginary residual after applying GBFactor.`);
+    const invalid = evaluations.filter((item) => item && item.physical === false);
+    if (!invalid.length) {
+      return warnings;
     }
-    if (evaluations.some((item) => item.transmission.lessThan(ctx.zero) || item.transmission.greaterThan(ctx.one))) {
-      uniquePush(warnings, `[ell=${ell}] The WKB transmission coefficient moved outside the physical [0,1] interval.`);
+    const requestedOrders = Array.from(new Set(
+      invalid
+        .map((item) => (item.requestedMain ? item.requestedMain.order : null))
+        .filter((item) => item !== null && item !== undefined)
+    )).sort((left, right) => left - right);
+    const reasons = Array.from(new Set(invalid.flatMap((item) => item.nonPhysicalReasons || [])));
+    if (!requestedOrders.length) {
+      return warnings;
     }
+    let message = `[ell=${ell}] The WKB transmission coefficient is non-physical at requested order`;
+    message += requestedOrders.length === 1 ? ` ${requestedOrders[0]}` : `s ${requestedOrders.join(", ")}`;
+    if (reasons.length) {
+      message += ` (${reasons.join("; ")})`;
+    }
+    message += "; non-physical points were removed from physical output.";
+    uniquePush(warnings, message);
     return warnings;
   }
 
@@ -793,32 +852,94 @@
     };
   }
 
+  function prepareGreybodyOrderComparisonParallelPlan(rawConfig, rawRadiationConfig, rawComparisonConfig) {
+    const baseConfig = normalizeConfig(rawConfig);
+    const comparison = normalizeGreybodyOrderComparison(rawComparisonConfig || {}, baseConfig.perturbationType);
+    const config = Object.assign({}, baseConfig, { mainOrder: comparison.orderMax });
+    const radiation = normalizeRadiationConfig(rawRadiationConfig || {}, config.perturbationType);
+    const ctx = App.Numerics.createContext(config.precision);
+    const parsed = parseExpressions(config);
+    const grid = buildParameterGrid(parsed.parameterNames, config.parameterSpecs, ctx);
+    if (grid.length !== 1) {
+      throw new Error("Greybody order comparison currently requires fixed parameter values. Remove parameter scan ranges before running it.");
+    }
+    const params = grid[0];
+    const omegaMin = new ctx.D(radiation.omegaMin);
+    const omegaMax = new ctx.D(radiation.omegaMax);
+    if (omegaMin.isNegative() || !omegaMax.greaterThan(omegaMin)) {
+      throw new Error("A non-negative frequency range with omega_max > omega_min is required.");
+    }
+    const omegaGrid = App.Numerics.buildLinearGrid(omegaMin, omegaMax, radiation.omegaPoints, ctx);
+    const barrier = prepareBarrierCase(parsed, config, params, comparison.ell, ctx, true);
+    const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
+    const temperature = kappa.div(ctx.two.times(ctx.pi));
+    const warnings = [];
+    barrier.warnings.forEach((warning) => uniquePush(warnings, `${warningPrefix(params, comparison.ell)} ${warning}`));
+    const tasks = [];
+    for (let order = comparison.orderMin; order <= comparison.orderMax; order += 1) {
+      tasks.push({
+        id: `${tasks.length}`,
+        order,
+        ell: comparison.ell,
+        params: serializeParams(params),
+        label: `${formatParamsForWarning(params)}, ell=${comparison.ell}, WKB ${order}`,
+        kernel: App.WKB.prepareTransmissionKernel(barrier.star, order, ctx)
+      });
+    }
+    return {
+      kind: "greybody-order-comparison",
+      precision: config.precision,
+      parameterNames: parsed.parameterNames,
+      perturbationType: config.perturbationType,
+      params: serializeParams(params),
+      ell: comparison.ell,
+      orderMin: comparison.orderMin,
+      orderMax: comparison.orderMax,
+      omegaGrid: omegaGrid.map((item) => item.toString()),
+      horizon: barrier.horizon.toString(),
+      surfaceGravity: kappa.toString(),
+      temperature: temperature.toString(),
+      warnings,
+      tasks,
+      diagnostics: Object.assign({
+        kind: "greybody-order-comparison",
+        ell: comparison.ell,
+        params: serializeParams(params)
+      }, finalizeBarrierCase(barrier))
+    };
+  }
+
   function evaluateRadiationChunk(chunk) {
     const ctx = App.Numerics.createContext(chunk.precision);
     const omegaGrid = chunk.omegas.map((item) => new ctx.D(item));
-    const residualThreshold = ctx.ten.pow(-Math.max(8, Math.floor(ctx.precision / 3)));
     const values = [];
     const transmissions = [];
     let imagResidualWarning = false;
     let intervalWarning = false;
+    let requestedOrder = null;
     for (const omega of omegaGrid) {
-      const evaluated = App.WKB.evaluateTransmissionKernel(chunk.kernel, omega, ctx);
-      transmissions.push(evaluated.transmission.toString());
-      if (evaluated.transmissionImagResidual.greaterThan(residualThreshold)) {
-        imagResidualWarning = true;
+      const evaluation = App.WKB.evaluateTransmissionKernel(chunk.kernel, omega, ctx);
+      if (evaluation.requestedMain) {
+        requestedOrder = evaluation.requestedMain.order;
       }
-      if (evaluated.transmission.lessThan(ctx.zero) || evaluated.transmission.greaterThan(ctx.one)) {
-        intervalWarning = true;
+      if (!evaluation.physical) {
+        transmissions.push(null);
+        values.push(null);
+        imagResidualWarning = imagResidualWarning || (evaluation.nonPhysicalReasons || []).includes("non-negligible imaginary part after GBFactor");
+        intervalWarning = intervalWarning || (evaluation.nonPhysicalReasons || []).includes("outside [0,1] after GBFactor");
+        continue;
       }
+      const selected = evaluation.main;
+      transmissions.push(selected.transmission.toString());
       if (chunk.kind === "hawking") {
         const temperature = new ctx.D(chunk.temperature);
         const emission = new ctx.D(2 * chunk.ell + 1)
-          .times(evaluated.transmission)
+          .times(selected.transmission)
           .times(thermalFactor(omega, temperature, ctx))
           .div(ctx.two.times(ctx.pi));
         values.push(emission.toString());
       } else {
-        values.push(evaluated.transmission.toString());
+        values.push(selected.transmission.toString());
       }
     }
     return {
@@ -828,7 +949,8 @@
       values,
       transmissions,
       imagResidualWarning,
-      intervalWarning
+      intervalWarning,
+      requestedOrder
     };
   }
 
@@ -866,7 +988,6 @@
     return {
       parameterNames: parsed.parameterNames,
       mainOrder: config.mainOrder,
-      showAllOrders: config.showAllOrders,
       warnings,
       cases
     };
@@ -954,6 +1075,7 @@
     let diagnosticEll = null;
     for (const params of grid) {
       for (const ell of ellValues) {
+        let processedPoints = 0;
         try {
           const barrier = prepareBarrierCase(parsed, config, params, ell, ctx, !diagnosticBarrier);
           const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
@@ -962,9 +1084,11 @@
           const evaluations = [];
           const values = [];
           for (const omega of omegaGrid) {
-            const evaluated = transmissionEvaluator(omega).main;
-            evaluations.push(evaluated);
-            values.push(evaluated.transmission.toString());
+            const evaluation = transmissionEvaluator(omega);
+            const selected = evaluation.main;
+            evaluations.push(evaluation);
+            values.push(evaluation.physical ? selected.transmission.toString() : null);
+            processedPoints += 1;
             completed += 1;
             if (progressCallback) {
               progressCallback({
@@ -974,7 +1098,11 @@
             }
           }
           barrier.warnings.forEach((warning) => uniquePush(warnings, `${warningPrefix(params, ell)} ${warning}`));
-          buildTransmissionWarnings(ctx, ell, evaluations).forEach((warning) => uniquePush(warnings, `${warningPrefix(params)} ${warning.replace(/^\[ell=\d+\]\s*/, "")}`));
+          buildTransmissionWarnings(ell, evaluations).forEach((warning) => uniquePush(warnings, `${warningPrefix(params)} ${warning.replace(/^\[ell=\d+\]\s*/, "")}`));
+          if (!hasAnyPhysicalTransmission(values)) {
+            uniquePush(warnings, `${warningPrefix(params, ell)} This greybody curve produced no physical transmission points and was excluded.`);
+            continue;
+          }
           curves.push({
             params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
             ell,
@@ -989,7 +1117,7 @@
             diagnosticEll = ell;
           }
         } catch (error) {
-          completed += omegaGrid.length;
+          completed += omegaGrid.length - processedPoints;
           if (progressCallback) {
             progressCallback({
               completed,
@@ -1001,7 +1129,7 @@
       }
     }
     if (!curves.length || !diagnosticBarrier || !diagnosticKappa || !diagnosticTemperature || !diagnosticParams) {
-      throw new Error("No valid greybody curve was obtained for the requested parameter/ell range.");
+      throw new Error(warnings[0] || "No valid greybody curve was obtained for the requested parameter/ell range.");
     }
     return {
       params: Object.fromEntries(Object.entries(diagnosticParams).map(([name, value]) => [name, value.toString()])),
@@ -1028,6 +1156,117 @@
     };
   }
 
+  function solveGreybodyOrderComparison(rawConfig, rawRadiationConfig, rawComparisonConfig, progressCallback) {
+    const baseConfig = normalizeConfig(rawConfig);
+    const comparison = normalizeGreybodyOrderComparison(rawComparisonConfig || {}, baseConfig.perturbationType);
+    const config = {
+      ...baseConfig,
+      mainOrder: comparison.orderMax
+    };
+    const radiation = normalizeRadiationConfig(rawRadiationConfig || {}, config.perturbationType);
+    const ctx = App.Numerics.createContext(config.precision);
+    const parsed = parseExpressions(config);
+    const grid = buildParameterGrid(parsed.parameterNames, config.parameterSpecs, ctx);
+    if (grid.length !== 1) {
+      throw new Error("Greybody order comparison currently requires fixed parameter values. Remove parameter scan ranges before running it.");
+    }
+    const params = grid[0];
+    const omegaMin = new ctx.D(radiation.omegaMin);
+    const omegaMax = new ctx.D(radiation.omegaMax);
+    if (omegaMin.isNegative() || !omegaMax.greaterThan(omegaMin)) {
+      throw new Error("A non-negative frequency range with omega_max > omega_min is required.");
+    }
+    const omegaGrid = App.Numerics.buildLinearGrid(omegaMin, omegaMax, radiation.omegaPoints, ctx);
+    const total = (comparison.orderMax - comparison.orderMin + 1) * omegaGrid.length;
+    let completed = 0;
+    const warnings = [];
+    const barrier = prepareBarrierCase(parsed, config, params, comparison.ell, ctx, true);
+    const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
+    const temperature = kappa.div(ctx.two.times(ctx.pi));
+    const curves = [];
+    barrier.warnings.forEach((warning) => uniquePush(warnings, `${warningPrefix(params, comparison.ell)} ${warning}`));
+    for (let order = comparison.orderMin; order <= comparison.orderMax; order += 1) {
+      const transmissionEvaluator = App.WKB.createTransmissionEvaluator(barrier.star, order, ctx);
+      const evaluations = [];
+      const values = [];
+      for (const omega of omegaGrid) {
+        const evaluation = transmissionEvaluator(omega);
+        const selected = evaluation.main;
+        evaluations.push(evaluation);
+        values.push(evaluation.physical ? selected.transmission.toString() : null);
+        completed += 1;
+        if (progressCallback) {
+          progressCallback({
+            completed,
+            total
+          });
+        }
+      }
+      buildTransmissionWarnings(comparison.ell, evaluations).forEach((warning) => uniquePush(warnings, `${warningPrefix(params)} ${warning.replace(/^\[ell=\d+\]\s*/, "")}`));
+      if (!hasAnyPhysicalTransmission(values)) {
+        uniquePush(warnings, `${warningPrefix(params, comparison.ell)} WKB ${order} produced no physical transmission points and was excluded from the comparison.`);
+        continue;
+      }
+      curves.push({
+        order,
+        label: `WKB ${order}`,
+        values
+      });
+    }
+    if (!curves.length) {
+      throw new Error(warnings[0] || "No valid greybody order curve was obtained for the requested comparison range.");
+    }
+    const referenceCurve = curves[curves.length - 1];
+    if (referenceCurve.order !== comparison.orderMax) {
+      uniquePush(
+        warnings,
+        `${warningPrefix(params, comparison.ell)} The requested highest WKB order ${comparison.orderMax} was excluded from the comparison; differences are shown relative to the highest valid order ${referenceCurve.order}.`
+      );
+    }
+    const differenceCurves = curves
+      .filter((curve) => curve.order !== referenceCurve.order)
+      .map((curve) => ({
+        order: curve.order,
+        label: `WKB ${referenceCurve.order} - WKB ${curve.order}`,
+        values: curve.values.map((value, index) => value === null || referenceCurve.values[index] === null ? null : new ctx.D(referenceCurve.values[index]).minus(new ctx.D(value)).toString())
+      }));
+    if (!differenceCurves.length) {
+      uniquePush(warnings, `${warningPrefix(params, comparison.ell)} Only one physical WKB order remained in the requested range; the difference plot is empty.`);
+    }
+    return {
+      params: serializeParams(params),
+      parameterNames: parsed.parameterNames,
+      perturbationType: config.perturbationType,
+      ell: comparison.ell,
+      orderMin: comparison.orderMin,
+      orderMax: comparison.orderMax,
+      referenceOrder: referenceCurve.order,
+      successfulOrders: curves.map((curve) => curve.order),
+      horizon: barrier.horizon.toString(),
+      surfaceGravity: kappa.toString(),
+      temperature: temperature.toString(),
+      warnings,
+      orderComparison: {
+        x: omegaGrid.map((item) => item.toString()),
+        ell: comparison.ell,
+        referenceOrder: referenceCurve.order,
+        curves
+      },
+      orderDifferences: {
+        x: omegaGrid.map((item) => item.toString()),
+        ell: comparison.ell,
+        referenceOrder: referenceCurve.order,
+        curves: differenceCurves
+      },
+      diagnostics: Object.assign({
+        kind: "greybody-order-comparison",
+        ell: comparison.ell,
+        params: serializeParams(params),
+        referenceOrder: referenceCurve.order
+      }, finalizeBarrierCase(barrier))
+    };
+  }
+
   function solveHawking(rawConfig, rawRadiationConfig, progressCallback) {
     const prepared = prepareFixedRadiationInputs(rawConfig, rawRadiationConfig);
     const { config, radiation, ctx, parsed, params, omegaGrid, ellFloor } = prepared;
@@ -1041,6 +1280,7 @@
     let diagnosticTemperature = null;
     const successfulElls = [];
     for (let ell = ellFloor; ell <= radiation.ellCutoff; ell += 1) {
+      let processedPoints = 0;
       try {
         const barrier = prepareBarrierCase(parsed, config, params, ell, ctx, !diagnosticBarrier);
         const kappa = surfaceGravity(barrier.metric, barrier.horizon, ctx);
@@ -1053,14 +1293,20 @@
         const values = [];
         for (let index = 0; index < omegaGrid.length; index += 1) {
           const omega = omegaGrid[index];
-          const evaluated = transmissionEvaluator(omega).main;
-          evaluations.push(evaluated);
-          const degeneracy = new ctx.D(2 * ell + 1);
-          const emission = degeneracy
-            .times(evaluated.transmission)
-            .times(thermalFactor(omega, temperature, ctx))
-            .div(ctx.two.times(ctx.pi));
-          values.push(emission.toString());
+          const evaluation = transmissionEvaluator(omega);
+          const selected = evaluation.main;
+          evaluations.push(evaluation);
+          if (!evaluation.physical) {
+            values.push(null);
+          } else {
+            const degeneracy = new ctx.D(2 * ell + 1);
+            const emission = degeneracy
+              .times(selected.transmission)
+              .times(thermalFactor(omega, temperature, ctx))
+              .div(ctx.two.times(ctx.pi));
+            values.push(emission.toString());
+          }
+          processedPoints += 1;
           completed += 1;
           if (progressCallback) {
             progressCallback({
@@ -1070,7 +1316,12 @@
           }
         }
         barrier.warnings.forEach((warning) => uniquePush(warnings, `[ell=${ell}] ${warning}`));
-        buildTransmissionWarnings(ctx, ell, evaluations).forEach((warning) => uniquePush(warnings, warning));
+        buildTransmissionWarnings(ell, evaluations).forEach((warning) => uniquePush(warnings, warning));
+        const transmissionValues = evaluations.map((item) => (item.physical ? item.main.transmission.toString() : null));
+        if (!hasAnyPhysicalTransmission(transmissionValues)) {
+          uniquePush(warnings, `[ell=${ell}] This contribution produced no physical transmission points and was excluded from the Hawking spectrum.`);
+          continue;
+        }
         partials.push({
           ell,
           values
@@ -1079,7 +1330,7 @@
           ell,
           label: `ell=${ell}`,
           params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
-          values: evaluations.map((item) => item.transmission.toString())
+          values: transmissionValues
         });
         successfulElls.push(ell);
         if (!diagnosticBarrier) {
@@ -1088,7 +1339,7 @@
           diagnosticTemperature = temperature;
         }
       } catch (error) {
-        completed += omegaGrid.length;
+        completed += omegaGrid.length - processedPoints;
         if (progressCallback) {
           progressCallback({
             completed,
@@ -1098,12 +1349,20 @@
         uniquePush(warnings, `[ell=${ell}] ${error && error.message ? error.message : String(error)}`);
       }
     }
-    if (!partials.length || !diagnosticBarrier || !diagnosticKappa || !diagnosticTemperature) {
-      throw new Error("No valid ell contribution was obtained for the Hawking spectrum.");
+    if (!partials.length || !diagnosticBarrier || !diagnosticKappa || !diagnosticTemperature || !successfulElls.length) {
+      throw new Error(warnings[0] || "No valid ell contribution was obtained for the Hawking spectrum.");
     }
-    const totalSpectrum = omegaGrid.map((_, index) =>
-      partials.reduce((sum, item) => sum.plus(new ctx.D(item.values[index])), ctx.zero).toString()
-    );
+    const totalSpectrum = omegaGrid.map((_, index) => {
+      let hasPhysicalPoint = false;
+      const total = partials.reduce((sum, item) => {
+        if (item.values[index] === null || item.values[index] === undefined) {
+          return sum;
+        }
+        hasPhysicalPoint = true;
+        return sum.plus(new ctx.D(item.values[index]));
+      }, ctx.zero);
+      return hasPhysicalPoint ? total.toString() : null;
+    });
     return {
       params: Object.fromEntries(Object.entries(params).map(([name, value]) => [name, value.toString()])),
       parameterNames: parsed.parameterNames,
@@ -1147,10 +1406,7 @@
       warnings: Array.from(new Set(greybody.warnings.concat(hawking.warnings))),
       greybody: {
         x: greybody.greybody.x,
-        curves: [{
-          ell: greybody.ell,
-          values: greybody.greybody.values
-        }]
+        curves: greybody.greybody.curves
       },
       spectrum: hawking.spectrum,
       diagnostics: hawking.diagnostics
@@ -1166,9 +1422,11 @@
     solveCase,
     solveAnalysis,
     solveGreybody,
+    solveGreybodyOrderComparison,
     solveHawking,
     solveRadiation,
     prepareGreybodyParallelPlan,
+    prepareGreybodyOrderComparisonParallelPlan,
     prepareHawkingParallelPlan,
     evaluateRadiationChunk
   };

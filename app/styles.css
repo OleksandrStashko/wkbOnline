@@ -1,19 +1,23 @@
 :root {
-  --paper: #f2ecdf;
-  --paper-strong: #fffdf7;
-  --surface: rgba(255, 253, 247, 0.82);
-  --surface-soft: rgba(255, 255, 255, 0.7);
-  --ink: #1f2c2b;
-  --ink-soft: #5b6763;
-  --edge: rgba(31, 44, 43, 0.12);
-  --accent: #0d676f;
-  --accent-strong: #0a4a52;
-  --accent-soft: rgba(13, 103, 111, 0.08);
-  --gold: #c3912f;
-  --warn: #8b2d1e;
-  --warn-bg: #fae6dd;
-  --shadow: 0 24px 80px rgba(18, 33, 37, 0.12);
-  --radius: 24px;
+  --paper: #edf2ef;
+  --paper-strong: #ffffff;
+  --surface: rgba(255, 255, 255, 0.94);
+  --surface-soft: #f6f9f7;
+  --surface-muted: #edf3f0;
+  --ink: #15232c;
+  --ink-soft: #586771;
+  --edge: rgba(21, 35, 44, 0.12);
+  --edge-strong: rgba(21, 35, 44, 0.2);
+  --accent: #0f6772;
+  --accent-strong: #0a4a54;
+  --accent-soft: rgba(15, 103, 114, 0.1);
+  --gold: #b68432;
+  --warn: #8a3524;
+  --warn-bg: #fbe8de;
+  --shadow: 0 18px 40px rgba(17, 28, 33, 0.08);
+  --shadow-soft: 0 10px 24px rgba(17, 28, 33, 0.06);
+  --radius: 18px;
+  --radius-pill: 999px;
 }
 
 * {
@@ -26,14 +30,14 @@ body {
   min-height: 100%;
   color: var(--ink);
   background:
-    radial-gradient(circle at top right, rgba(195, 145, 47, 0.16), transparent 28%),
-    radial-gradient(circle at top left, rgba(13, 103, 111, 0.12), transparent 32%),
-    linear-gradient(180deg, #ece3d2 0%, #f3ede1 44%, #eee7db 100%);
-  font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    radial-gradient(circle at top right, rgba(182, 132, 50, 0.08), transparent 24%),
+    radial-gradient(circle at top left, rgba(15, 103, 114, 0.08), transparent 28%),
+    linear-gradient(180deg, #eef3f0 0%, #e6eeea 100%);
+  font-family: "Segoe UI Variable Text", "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
-  padding: 28px;
+  padding: 20px;
 }
 
 textarea,
@@ -120,7 +124,6 @@ table code {
   border: 1px solid var(--edge);
   border-radius: var(--radius);
   background: var(--surface);
-  backdrop-filter: blur(10px);
   box-shadow: var(--shadow);
 }
 
@@ -189,6 +192,7 @@ table code {
 .panel-intro,
 .summary-line,
 .status-line,
+.status-kicker,
 .progress-text,
 .card-head p,
 .section-head p,
@@ -215,22 +219,25 @@ table code {
 .checkbox-field {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .field-label,
 .preview-label {
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 textarea,
 input,
 select {
   width: 100%;
-  border: 1px solid rgba(31, 44, 43, 0.14);
+  border: 1px solid rgba(21, 35, 44, 0.16);
   border-radius: 15px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.78);
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.98);
   color: var(--ink);
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
@@ -239,8 +246,8 @@ textarea:focus,
 input:focus,
 select:focus {
   outline: none;
-  border-color: rgba(13, 103, 111, 0.45);
-  box-shadow: 0 0 0 4px rgba(13, 103, 111, 0.1);
+  border-color: rgba(15, 103, 114, 0.45);
+  box-shadow: 0 0 0 4px rgba(15, 103, 114, 0.12);
 }
 
 .formula-input {
@@ -248,8 +255,7 @@ select:focus {
   resize: vertical;
   font-size: 1rem;
   line-height: 1.45;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 243, 235, 0.96));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 247, 0.98));
 }
 
 .formula-input:disabled {
@@ -261,11 +267,12 @@ select:focus {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  border-radius: 999px;
-  background: var(--accent-soft);
+  padding: 10px 14px;
+  border: 1px solid rgba(15, 103, 114, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgba(15, 103, 114, 0.06);
   color: var(--ink);
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .toggle-inline input {
@@ -274,7 +281,7 @@ select:focus {
 }
 
 .section-card {
-  padding: 22px;
+  padding: 20px;
 }
 
 .setup-grid {
@@ -292,14 +299,73 @@ select:focus {
   display: grid;
   gap: 12px;
   padding: 18px;
-  border: 1px solid rgba(31, 44, 43, 0.08);
-  border-radius: 20px;
+  border: 1px solid rgba(21, 35, 44, 0.08);
+  border-radius: 18px;
   background: var(--surface-soft);
+  box-shadow: var(--shadow-soft);
 }
 
 .editor-card.mirrored-editor {
-  opacity: 0.8;
-  background: rgba(236, 239, 236, 0.86);
+  opacity: 0.9;
+  background: rgba(241, 246, 243, 0.96);
+}
+
+.editor-card-head p {
+  margin-top: 4px;
+}
+
+.editor-card-primary {
+  gap: 14px;
+}
+
+.derived-metric-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 103, 114, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(242, 248, 245, 0.98), rgba(248, 250, 249, 0.98));
+}
+
+.derived-metric-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+
+.derived-metric-head h4,
+.derived-metric-copy strong {
+  margin: 0;
+}
+
+.derived-metric-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.derived-metric-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.derived-metric-preview .formula-preview-stack {
+  gap: 0;
+}
+
+.derived-metric-preview .formula-preview-box {
+  min-height: 64px;
+  padding: 10px 14px;
+}
+
+.derived-metric-preview .math-view {
+  font-size: 1.04rem;
+}
+
+.section-copy {
+  display: grid;
+  gap: 4px;
 }
 
 .editor-toolbar {
@@ -316,9 +382,9 @@ select:focus {
 
 .toolbar-btn {
   border: 1px solid rgba(13, 103, 111, 0.16);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 7px 12px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.96);
   color: var(--ink);
   cursor: pointer;
 }
@@ -332,38 +398,67 @@ select:focus {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
 }
 
 .field-group.three-columns {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.field-group.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-span-full {
+  grid-column: 1 / -1;
+}
+
+.wkb-primary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wkb-secondary-grid {
+  grid-template-columns: 1fr;
+}
+
 .checkbox-field {
-  grid-auto-flow: column;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   justify-content: start;
-  gap: 10px;
+  gap: 12px;
 }
 
 .checkbox-field input {
   width: auto;
   margin: 0;
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .checkbox-card {
-  align-self: end;
-  padding: 12px 14px;
-  border: 1px solid rgba(31, 44, 43, 0.08);
+  align-self: stretch;
+  padding: 14px 16px;
+  border: 1px solid rgba(21, 35, 44, 0.08);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(247, 250, 248, 0.92);
+}
+
+.checkbox-card-inline {
+  min-height: 100%;
+}
+
+.checkbox-field span {
+  min-width: 0;
+  line-height: 1.45;
+  white-space: normal;
 }
 
 .formula-preview-box {
-  min-height: 108px;
-  padding: 14px 16px;
-  border: 1px solid rgba(13, 103, 111, 0.12);
+  min-height: 80px;
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 103, 114, 0.12);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.96);
   overflow-x: auto;
 }
 
@@ -432,9 +527,9 @@ select:focus {
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid rgba(13, 103, 111, 0.12);
+  border: 1px solid rgba(15, 103, 114, 0.12);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .parameter-row-top {
@@ -461,26 +556,37 @@ select:focus {
 
 .primary-button,
 .ghost-button {
-  border: none;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-pill);
   padding: 12px 18px;
   cursor: pointer;
-  transition: transform 120ms ease, filter 120ms ease;
+  text-align: center;
+  line-height: 1.3;
+  white-space: normal;
+  transition: transform 120ms ease, filter 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
 .primary-button {
+  border: 1px solid rgba(10, 74, 84, 0.24);
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #f7f4ed;
+  color: #f7fbfa;
   font-weight: 600;
+  box-shadow: 0 12px 24px rgba(15, 103, 114, 0.16);
 }
 
 .ghost-button {
-  background: rgba(31, 44, 43, 0.08);
+  border: 1px solid rgba(21, 35, 44, 0.12);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
 }
 
 .ghost-button.is-active {
-  background: rgba(13, 103, 111, 0.16);
+  border-color: rgba(15, 103, 114, 0.24);
+  background: rgba(15, 103, 114, 0.12);
   color: var(--accent-strong);
   font-weight: 600;
 }
@@ -537,7 +643,7 @@ select:focus {
   border-radius: 16px;
   background: var(--warn-bg);
   color: var(--warn);
-  border: 1px solid rgba(139, 45, 30, 0.14);
+  border: 1px solid rgba(138, 53, 36, 0.16);
 }
 
 .warning-box {
@@ -570,14 +676,14 @@ select:focus {
 }
 
 .card {
-  padding: 22px;
+  padding: 20px;
 }
 
 .table-wrap {
   overflow: auto;
-  border: 1px solid rgba(31, 44, 43, 0.1);
+  border: 1px solid rgba(21, 35, 44, 0.1);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .result-table-scroll {
@@ -595,7 +701,7 @@ select:focus {
 
 table {
   width: 100%;
-  min-width: 720px;
+  min-width: 640px;
   border-collapse: collapse;
 }
 
@@ -611,8 +717,7 @@ thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: rgba(244, 239, 229, 0.96);
-  backdrop-filter: blur(6px);
+  background: rgba(246, 249, 247, 0.98);
 }
 
 tbody tr.selected-row {
@@ -645,8 +750,8 @@ tbody tr.selected-row {
   gap: 8px;
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(31, 44, 43, 0.1);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(21, 35, 44, 0.08);
 }
 
 .summary-chip span {
@@ -663,7 +768,7 @@ tbody tr.selected-row {
 }
 
 .chart-wrap {
-  min-height: 420px;
+  min-height: 320px;
 }
 
 .chart-stage {
@@ -680,7 +785,7 @@ tbody tr.selected-row {
 
 .chart-wrap svg {
   width: 100%;
-  height: 404px;
+  height: clamp(280px, 38vh, 404px);
   display: block;
 }
 
@@ -719,7 +824,7 @@ tbody tr.selected-row {
 
 .chart-label {
   fill: var(--ink-soft);
-  font-size: 16px;
+  font-size: 14px;
   font-family: "Consolas", "Lucida Console", monospace;
 }
 
@@ -736,11 +841,11 @@ tbody tr.selected-row {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  border: 1px solid rgba(31, 44, 43, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(21, 35, 44, 0.08);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.94);
   color: var(--ink-soft);
-  font-size: 0.98rem;
+  font-size: 0.92rem;
 }
 
 .chart-legend-button {
@@ -763,10 +868,10 @@ tbody tr.selected-row {
   min-width: 150px;
   max-width: 260px;
   padding: 10px 12px;
-  border: 1px solid rgba(31, 44, 43, 0.12);
+  border: 1px solid rgba(21, 35, 44, 0.12);
   border-radius: 14px;
-  background: rgba(252, 253, 250, 0.97);
-  box-shadow: 0 18px 32px rgba(26, 33, 33, 0.16);
+  background: rgba(252, 253, 250, 0.99);
+  box-shadow: 0 18px 32px rgba(26, 33, 33, 0.12);
   color: var(--ink);
   font-size: 0.96rem;
   line-height: 1.35;
@@ -782,8 +887,8 @@ tbody tr.selected-row {
   top: 10px;
   right: 12px;
   z-index: 4;
-  border: 1px solid rgba(31, 44, 43, 0.12);
-  border-radius: 999px;
+  border: 1px solid rgba(21, 35, 44, 0.12);
+  border-radius: var(--radius-pill);
   padding: 6px 10px;
   background: rgba(252, 253, 250, 0.92);
   color: var(--ink);
@@ -857,8 +962,8 @@ tbody tr.selected-row {
 .help-item {
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(31, 44, 43, 0.08);
-  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(21, 35, 44, 0.08);
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .help-item code {
@@ -905,7 +1010,7 @@ tbody tr.selected-row {
 
 @media (max-width: 760px) {
   body {
-    padding: 16px;
+    padding: 14px;
   }
 
   .result-table-scroll {
@@ -926,6 +1031,6 @@ tbody tr.selected-row {
 
   .toggle-inline {
     width: 100%;
-    justify-content: center;
+    justify-content: start;
   }
 }

@@ -450,6 +450,22 @@
     };
   }
 
+  function transmissionResidualThreshold(ctx) {
+    return ctx.ten.pow(-Math.max(8, Math.floor(ctx.precision / 3)));
+  }
+
+  function transmissionPhysicalityReasons(item, ctx, residualThreshold) {
+    const threshold = residualThreshold || transmissionResidualThreshold(ctx);
+    const reasons = [];
+    if (item.transmissionImagResidual.greaterThan(threshold)) {
+      reasons.push("non-negligible imaginary part after GBFactor");
+    }
+    if (item.transmission.lessThan(ctx.zero) || item.transmission.greaterThan(ctx.one)) {
+      reasons.push("outside [0,1] after GBFactor");
+    }
+    return reasons;
+  }
+
   function prepareOrderPolynomials(derivatives, maxOrder, ctx) {
     const data = prepareData(ctx, maxOrder);
     const fixedPowers = buildFixedVariablePowers(derivatives, data.sharedMaxPowers, ctx);
@@ -486,11 +502,16 @@
           transmissionImagResidual: greybody.imagResidual
         };
       });
+      const requestedMain = orders[orders.length - 1];
+      const nonPhysicalReasons = transmissionPhysicalityReasons(requestedMain, ctx);
       return {
         omegaSquared,
         initialK: initial,
         orders,
-        main: orders[orders.length - 1]
+        main: requestedMain,
+        requestedMain,
+        physical: !nonPhysicalReasons.length,
+        nonPhysicalReasons
       };
     };
   }
@@ -522,13 +543,23 @@
     const omegaSquared = omega.times(omega);
     const v0 = new ctx.D(kernel.v0);
     const barrierRoot = new ctx.D(kernel.v2).times(-2).sqrt();
-    const coeffs = kernel.coeffs.map((coeff) => (coeff ? deserializeComplex(coeff, ctx) : null));
     const initial = new App.Numerics.ComplexDecimal(
       ctx.zero,
       omegaSquared.minus(v0).div(barrierRoot)
     );
+    const coeffs = kernel.coeffs.map((coeff) => (coeff ? deserializeComplex(coeff, ctx) : null));
     const solved = solveComplexPolynomialRoot(coeffs, omegaSquared, initial, ctx);
     const greybody = greybodyFromK(solved.root, ctx);
+    const main = {
+      order: kernel.maxOrder,
+      k: solved.root,
+      residual: solved.residual,
+      iterations: solved.iterations,
+      transmission: greybody.value,
+      transmissionComplex: greybody.complexValue,
+      transmissionImagResidual: greybody.imagResidual
+    };
+    const nonPhysicalReasons = transmissionPhysicalityReasons(main, ctx);
     return {
       omegaSquared,
       initialK: initial,
@@ -538,7 +569,11 @@
       iterations: solved.iterations,
       transmission: greybody.value,
       transmissionComplex: greybody.complexValue,
-      transmissionImagResidual: greybody.imagResidual
+      transmissionImagResidual: greybody.imagResidual,
+      main,
+      requestedMain: main,
+      physical: !nonPhysicalReasons.length,
+      nonPhysicalReasons
     };
   }
 

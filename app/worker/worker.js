@@ -1,5 +1,5 @@
 const workerBase = self.QNMAppWorkerBase || new URL("./", self.location.href).href;
-const workerAssetVersion = "20260403x";
+const workerAssetVersion = "20260405e";
 const asset = (path) => new URL(`${path}?v=${workerAssetVersion}`, workerBase).href;
 
 self.importScripts(
@@ -126,6 +126,27 @@ self.addEventListener("message", (event) => {
     }
     return;
   }
+  if (message.type === "runGreybodyOrderComparison") {
+    try {
+      const result = self.QNMApp.Solver.solveGreybodyOrderComparison(message.config, message.radiation, message.comparison, (progress) => {
+        self.postMessage({
+          type: "greybodyOrderComparisonProgress",
+          completed: progress.completed,
+          total: progress.total
+        });
+      });
+      self.postMessage({
+        type: "greybodyOrderComparisonDone",
+        result
+      });
+    } catch (error) {
+      self.postMessage({
+        type: "greybodyOrderComparisonError",
+        message: error && error.message ? error.message : String(error)
+      });
+    }
+    return;
+  }
   if (message.type === "prepareGreybodyParallelPlan") {
     try {
       const result = self.QNMApp.Solver.prepareGreybodyParallelPlan(message.config, message.radiation);
@@ -136,6 +157,21 @@ self.addEventListener("message", (event) => {
     } catch (error) {
       self.postMessage({
         type: "prepareGreybodyParallelPlanError",
+        message: error && error.message ? error.message : String(error)
+      });
+    }
+    return;
+  }
+  if (message.type === "prepareGreybodyOrderComparisonParallelPlan") {
+    try {
+      const result = self.QNMApp.Solver.prepareGreybodyOrderComparisonParallelPlan(message.config, message.radiation, message.comparison);
+      self.postMessage({
+        type: "prepareGreybodyOrderComparisonParallelPlanDone",
+        result
+      });
+    } catch (error) {
+      self.postMessage({
+        type: "prepareGreybodyOrderComparisonParallelPlanError",
         message: error && error.message ? error.message : String(error)
       });
     }
